@@ -165,6 +165,7 @@ void ShimPumpEvents (void)
 	shimInput.buttonDown = 0;
 	shimInput.brakeDown = 0;
 	shimInput.bashDown = 0;
+	shimInput.padStart = 0;
 	if ((SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_LMASK) != 0) shimInput.buttonDown = 1;
 	if (ks[SDL_SCANCODE_X]) shimInput.buttonDown = 1;
 	if (ks[SDL_SCANCODE_SPACE]) shimInput.brakeDown = 1;
@@ -175,6 +176,7 @@ void ShimPumpEvents (void)
 		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST)) shimInput.brakeDown = 1;
 		if (SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 8192) shimInput.brakeDown = 1;
 		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_WEST)) shimInput.bashDown = 1;
+		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_START)) shimInput.padStart = 1;
 	}
 
 	ShimAdvanceTicks();

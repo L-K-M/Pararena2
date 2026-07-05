@@ -286,12 +286,23 @@ void HandleEvent (void)
 		return;
 	}
 
-	/* paused mid-game: draw a notice, wait for Tab to resume */
+	/* paused mid-game: draw a notice, wait for Tab (or pad Start) to resume.
+	 * The game sets pausing while Tab is still held down, so the resume key
+	 * must be seen released once before a new press counts — otherwise the
+	 * pause instantly bounces back into play. */
 	if (primaryMode == kPlayMode && pausing)
 	{
+		static int resumeArmed;
+		const bool *ks = SDL_GetKeyboardState(NULL);
+		int pauseKeyHeld = ks[SDL_SCANCODE_TAB] || shimInput.padStart;
 		drawText((short)(screenWide / 2 - 100), 20, "PAUSED - PRESS TAB TO RESUME", IDX_YELLOW);
-		if (keyPressedOnce(SDL_SCANCODE_TAB))
+		if (!pauseKeyHeld)
+			resumeArmed = 1;
+		else if (resumeArmed)
+		{
+			resumeArmed = 0;
 			pausing = FALSE;
+		}
 		SDL_Delay(10);
 		return;
 	}

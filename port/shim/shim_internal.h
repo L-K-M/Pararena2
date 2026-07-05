@@ -50,6 +50,7 @@ typedef struct ShimInput {
 	int     buttonDown;          /* action: LMB / pad south / X key */
 	int     brakeDown;           /* space / pad trigger or east */
 	int     bashDown;            /* B,N,M / pad west */
+	int     padStart;            /* pad Start (pause) */
 	int     keyBits[4];          /* raw Mac keymap words, see shim_input.c */
 	int     quitRequested;
 	int     padConnected;
