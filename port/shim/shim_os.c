@@ -133,11 +133,139 @@ void ParamText (ConstStr255Param a, ConstStr255Param b, ConstStr255Param c, Cons
 	if (d) memcpy(paramTexts[3], d, (size_t)d[0] + 1);
 }
 
+/* ---- interactive alert overlay ----
+ * The game repaints the whole screen right after every Alert() call
+ * (DoCommandKey redraws, PrepareNewGame refreshes), so the box needs no undo.
+ * Ticks keep advancing while we wait; the callers already subtract the paused
+ * time from the game clock. */
+
+static void alertText (short x, short y, const unsigned char *ps, unsigned char colorIdx)
+{
+	RGBColor c;
+	Index2Color(colorIdx, &c);
+	RGBForeColor(&c);
+	MoveTo(x, y);
+	DrawString(ps);
+}
+
+static void alertCText (short x, short y, const char *s, unsigned char colorIdx)
+{
+	Str255 ps;
+	size_t n = strlen(s);
+	if (n > 255) n = 255;
+	ps[0] = (unsigned char)n;
+	memcpy(ps + 1, s, n);
+	alertText(x, y, ps, colorIdx);
+}
+
+static short alertModal (const unsigned char *message, const char *fallback,
+                         const char *yesLabel, const char *noLabel,
+                         short yesReturns, short noReturns)
+{
+	GrafPtr wasPort;
+	int W = screenBits.bounds.right, H = screenBits.bounds.bottom;
+	Rect panel;
+	panel.left = (short)(W / 2 - 224);
+	panel.right = (short)(W / 2 + 224);
+	panel.top = (short)(H / 2 - 64);
+	panel.bottom = (short)(H / 2 + 64);
+
+	GetPort(&wasPort);
+	SetPort(&shimScreenPort);
+	PmForeColor(15);
+	PaintRect(&panel);
+	{
+		RGBColor c;
+		Index2Color(0, &c);
+		RGBForeColor(&c);
+		FrameRect(&panel);
+		Rect inner = panel;
+		InsetRect(&inner, 2, 2);
+		FrameRect(&inner);
+	}
+
+	/* message: Pascal string wrapped at 52 chars; port fallback if empty */
+	{
+		unsigned char line[64];
+		int len = message ? message[0] : 0;
+		short y = (short)(panel.top + 34);
+		if (len == 0 && fallback)
+		{
+			alertCText((short)(panel.left + 24), y, fallback, 1);
+		}
+		else
+		{
+			int off = 0;
+			while (off < len && y < panel.bottom - 40)
+			{
+				int chunk = len - off > 52 ? 52 : len - off;
+				line[0] = (unsigned char)chunk;
+				memcpy(line + 1, message + 1 + off, (size_t)chunk);
+				alertText((short)(panel.left + 24), y, line, 1);
+				off += chunk;
+				y += 12;
+			}
+		}
+	}
+	alertCText((short)(panel.left + 24), (short)(panel.bottom - 36), yesLabel, 0);
+	alertCText((short)(panel.left + 24), (short)(panel.bottom - 20), noLabel, 0);
+	SetPort(wasPort);
+	ShimForcePresent();
+
+	/* wait for the triggering keys/buttons to clear, then for an answer;
+	 * pad South answers yes, pad East answers no */
+	const bool *ks;
+	for (;;)
+	{
+		ShimPumpEvents();
+		ShimTickSleep();
+		ks = SDL_GetKeyboardState(NULL);
+		if (!ks[SDL_SCANCODE_Y] && !ks[SDL_SCANCODE_N] && !ks[SDL_SCANCODE_RETURN] &&
+		    !ks[SDL_SCANCODE_ESCAPE] && !shimInput.buttonDown && !shimInput.brakeDown)
+			break;
+		if (shimInput.quitRequested)
+			return noReturns;
+	}
+	for (;;)
+	{
+		ShimPumpEvents();
+		ShimTickSleep();
+		ks = SDL_GetKeyboardState(NULL);
+		if (ks[SDL_SCANCODE_Y] || ks[SDL_SCANCODE_RETURN] || shimInput.buttonDown)
+			return yesReturns;
+		if (ks[SDL_SCANCODE_N] || ks[SDL_SCANCODE_ESCAPE] || shimInput.brakeDown)
+			return noReturns;
+		if (shimInput.quitRequested)
+			return noReturns;
+	}
+}
+
 short Alert (short alertID, void *filterProc)
 {
 	(void)filterProc;
-	ShimLog("Alert %d suppressed (returning default button 1)", alertID);
-	return 1;
+	if (shimHeadless)
+	{
+		ShimLog("Alert %d suppressed in headless mode (returning button 1)", alertID);
+		return 1;
+	}
+	switch (alertID)
+	{
+		case 1009:      /* rAbortGameAlertID: button 1 = "no thanks", 2 = forfeit */
+			return alertModal((const unsigned char *)"",
+			                  "FORFEIT THIS TOURNAMENT GAME?",
+			                  "Y / RETURN / (A) - FORFEIT",
+			                  "N / ESC / (B) - KEEP PLAYING",
+			                  2, 1);
+		case 1011:      /* rCantRepeatAlertID: 1 = play standard game, 2 = cancel */
+			return alertModal(paramTexts[0],
+			                  "TOURNAMENT NOT AVAILABLE - PLAY A STANDARD GAME?",
+			                  "Y / RETURN / (A) - PLAY STANDARD GAME",
+			                  "N / ESC / (B) - CANCEL",
+			                  1, 2);
+		default:
+			ShimLog("Alert %d suppressed (returning default button 1)", alertID);
+			return 1;
+	}
 }
 
 GDHandle GetMainDevice (void) { return NULL; }
