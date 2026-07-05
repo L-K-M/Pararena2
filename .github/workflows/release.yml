@@ -1,0 +1,136 @@
+# CD: package self-contained builds for every supported target.
+#
+# - every push to master (and manual runs) uploads the packages as workflow
+#   artifacts — a rolling "does it still ship?" check
+# - pushing a tag like v1.0 additionally publishes a GitHub Release with the
+#   packages attached
+#
+# SDL3 is linked statically (it dlopens X11/Wayland/audio at runtime, so the
+# Linux binary stays portable across distros), and the asset pack travels
+# next to the binary — each archive is a complete, runnable game.
+#
+# Targets not in the matrix: Linux arm64 (ubuntu-24.04-arm) and Windows arm64
+# (windows-11-arm) runners are free for public repos only — add matrix
+# entries mirroring the x86_64 ones if/when this repo can use them.
+
+name: release
+
+on:
+  push:
+    branches: ["master"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: package ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-latest
+          - name: macos-universal
+            os: macos-latest
+            osx_archs: "arm64;x86_64"
+          - name: windows-x86_64
+            os: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SDL build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev libjack-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libwayland-dev libdecor-0-dev libdrm-dev libgbm-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libdbus-1-dev libudev-dev \
+            libibus-1.0-dev
+
+      - name: Configure
+        shell: bash
+        run: |
+          EXTRA=()
+          if [ -n "${{ matrix.osx_archs }}" ]; then
+            EXTRA+=(-DCMAKE_OSX_ARCHITECTURES="${{ matrix.osx_archs }}"
+                    -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0)
+          fi
+          cmake -S port -B port/build \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DSDL_SHARED=OFF -DSDL_STATIC=ON \
+                "${EXTRA[@]}"
+
+      - name: Build
+        run: cmake --build port/build --config Release -j
+
+      - name: Locate binary
+        id: bin
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            echo "path=port/build/Release/pararena2.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=port/build/pararena2" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Smoke test (headless CPU vs CPU)
+        shell: bash
+        run: ./${{ steps.bin.outputs.path }} --headless --cpu-demo --frames 900 --fast 8
+
+      - name: Package
+        id: pack
+        shell: bash
+        run: |
+          BIN="${{ steps.bin.outputs.path }}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="$GITHUB_REF_NAME"
+          else
+            VERSION="${GITHUB_SHA::7}"
+          fi
+          NAME="pararena2-$VERSION-${{ matrix.name }}"
+          mkdir -p "stage/pararena2"
+          cp "$BIN" "stage/pararena2/"
+          cp "$(dirname "$BIN")/pararena2.dat" "stage/pararena2/"
+          cp port/README.md "stage/pararena2/README.md"
+          cp LICENSE "stage/pararena2/"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            (cd stage && 7z a "../$NAME.zip" pararena2)
+            echo "file=$NAME.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -czf "$NAME.tar.gz" -C stage pararena2
+            echo "file=$NAME.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify macOS universal binary
+        if: runner.os == 'macOS'
+        run: lipo -info stage/pararena2/pararena2 | tee /dev/stderr | grep -q "arm64" && lipo -info stage/pararena2/pararena2 | grep -q "x86_64"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.file }}
+          path: ${{ steps.pack.outputs.file }}
+          if-no-files-found: error
+
+  release:
+    name: publish GitHub release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
