@@ -102,6 +102,16 @@ static void handleEvent (const SDL_Event *ev)
 			    (ev->key.key == SDLK_RETURN && (ev->key.mod & SDL_KMOD_ALT)))
 				PortVideoSetFullscreen(!PortVideoIsFullscreen());
 			break;
+		case SDL_EVENT_WINDOW_EXPOSED:
+		case SDL_EVENT_WINDOW_RESTORED:
+		case SDL_EVENT_WINDOW_RESIZED:
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+			/* the compositor may not retain our contents; repaint even if the
+			 * 8bpp screen hasn't changed (idle splash draws nothing for long
+			 * stretches), bypassing the present throttle */
+			shimScreenDirty = 1;
+			lastPresentNS = 0;
+			break;
 		default:
 			break;
 	}
