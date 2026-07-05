@@ -10,6 +10,7 @@ int PararenaMain (void);          /* Sources/Main.c, renamed via -Dmain= */
 int PortVideoOpen (int w, int h, int startFullscreen);
 void ShimTimeInit (void);
 extern int portCpuDemo;
+extern int portFourDemo;
 
 static int loadPackSearching (const char *argv0)
 {
@@ -52,6 +53,12 @@ int main (int argc, char **argv)
 			fullscreen = 1;
 		else if (strcmp(argv[i], "--cpu-demo") == 0)
 			portCpuDemo = 1;
+		else if (strcmp(argv[i], "--four-demo") == 0 && i + 1 < argc)
+		{
+			portFourDemo = atoi(argv[++i]);   /* 1=2v2 2=FFA-2 3=FFA-4, all AI */
+			if (portFourDemo < 1 || portFourDemo > 3)
+				portFourDemo = 1;
+		}
 		else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc)
 			shimAutoQuitTicks = atol(argv[++i]);
 		else if (strcmp(argv[i], "--dump") == 0 && i + 1 < argc)

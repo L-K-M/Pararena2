@@ -17,16 +17,21 @@
 #include "Render.h"
 
 void PortInputSetPlayMode (int playing);
+void PortFourRun (int mode, const int personas[4]);   /* port_four.c */
 
 int portCpuDemo = 0;          /* --cpu-demo: auto-start George vs Mara */
+int portFourDemo = 0;         /* --four-demo N: auto-run one 4P AI game */
 
-/* menu model */
-enum { MI_START, MI_GAME, MI_OPPONENT, MI_LEAGUE, MI_SIDE, MI_SOUND, MI_FULLSCREEN, MI_QUIT, MI_COUNT };
-static int menuSel = MI_START;
+/* menu model; items are shown/hidden depending on the selected mode */
+enum { MI_START, MI_MODE, MI_GAME, MI_OPPONENT, MI_LEAGUE, MI_SIDE,
+       MI_P2, MI_P3, MI_P4, MI_SOUND, MI_FULLSCREEN, MI_QUIT, MI_ITEMS };
+static int menuSel = 0;        /* index into the visible-item list */
+static int selMode = 0;        /* 0 = classic 1v1, 1 = 2v2, 2 = FFA-2, 3 = FFA-4 */
 static int selGame = 0;        /* 0 standard, 1 tournament, 2 boardin', 3 scorin' */
 static int selOpponent = 5;    /* persona-1: default Ms. Teak (index 5 = persona 6) */
 static int selLeague = 4;      /* professional */
 static int selSide = 0;        /* 0 = defend left goal */
+static int selSeat[3] = { 1, 2, 3 };  /* P2..P4: 0 = human on a pad, 1..6 = persona */
 static int wasPlaying = 0;
 static int menuDirty = 1;
 
@@ -34,6 +39,39 @@ static const char *gameNames[4] = { "STANDARD GAME", "TOURNAMENT", "PRACTICE BOA
 static const short gameConsts[4] = { kStandardGame, kTournament, kPracticeBoardin, kPracticeScoring };
 static const char *oppNames[6] = { "SIMPLE GEORGE", "MAD MARA", "HEAVY OTTO", "CLEVER CLAIRE", "MR. EAZE", "MS. TEAK" };
 static const char *leagueNames[5] = { "LITTLE LEAGUE", "JUNIOR VARSITY", "VARSITY", "MINOR LEAGUE", "PROFESSIONAL" };
+static const char *modeNames[4] = { "1 VS 1", "2 VS 2", "FFA - 2 GOALS", "FFA - 4 GOALS" };
+static const char *seatNames[7] = { "HUMAN (PAD)", "SIMPLE GEORGE", "MAD MARA", "HEAVY OTTO",
+                                    "CLEVER CLAIRE", "MR. EAZE", "MS. TEAK" };
+
+static int visItems[MI_ITEMS];
+static int visCount;
+
+static void buildMenuItems (void)
+{
+	int n = 0;
+	visItems[n++] = MI_START;
+	visItems[n++] = MI_MODE;
+	if (selMode == 0)
+	{
+		visItems[n++] = MI_GAME;
+		visItems[n++] = MI_OPPONENT;
+		visItems[n++] = MI_LEAGUE;
+		visItems[n++] = MI_SIDE;
+	}
+	else
+	{
+		visItems[n++] = MI_P2;
+		visItems[n++] = MI_P3;
+		visItems[n++] = MI_P4;
+		visItems[n++] = MI_LEAGUE;
+	}
+	visItems[n++] = MI_SOUND;
+	visItems[n++] = MI_FULLSCREEN;
+	visItems[n++] = MI_QUIT;
+	visCount = n;
+	if (menuSel >= visCount)
+		menuSel = visCount - 1;
+}
 
 /* ------------------------------------------------------------------ */
 /* WhosOnFirst — transcribed verbatim from Sources/TeamSetUp.c (the rest
@@ -153,13 +191,38 @@ static void menuValueText (int item, char *buf, size_t bufsz)
 {
 	switch (item)
 	{
+		case MI_MODE: snprintf(buf, bufsz, "%s", modeNames[selMode]); break;
 		case MI_GAME: snprintf(buf, bufsz, "%s", gameNames[selGame]); break;
 		case MI_OPPONENT: snprintf(buf, bufsz, "%s", oppNames[selOpponent]); break;
 		case MI_LEAGUE: snprintf(buf, bufsz, "%s", leagueNames[selLeague]); break;
 		case MI_SIDE: snprintf(buf, bufsz, "%s", selSide == 0 ? "LEFT GOAL" : "RIGHT GOAL"); break;
+		case MI_P2: snprintf(buf, bufsz, "%s", seatNames[selSeat[0]]); break;
+		case MI_P3: snprintf(buf, bufsz, "%s", seatNames[selSeat[1]]); break;
+		case MI_P4: snprintf(buf, bufsz, "%s", seatNames[selSeat[2]]); break;
 		case MI_SOUND: snprintf(buf, bufsz, "%s", soundOn ? "ON" : "OFF"); break;
 		case MI_FULLSCREEN: snprintf(buf, bufsz, "%s", PortVideoIsFullscreen() ? "ON" : "OFF"); break;
 		default: buf[0] = 0; break;
+	}
+}
+
+static const char *menuItemLabel (int item)
+{
+	switch (item)
+	{
+		case MI_START: return "START GAME";
+		case MI_MODE: return "MODE";
+		case MI_GAME: return "GAME";
+		case MI_OPPONENT: return "OPPONENT";
+		case MI_LEAGUE: return "LEAGUE";
+		case MI_SIDE: return "PLAY SIDE";
+		/* in 2v2 the seats pair up left {P1,P3} vs right {P2,P4} */
+		case MI_P2: return selMode == 1 ? "RIVAL 1" : "PLAYER 2";
+		case MI_P3: return selMode == 1 ? "TEAMMATE" : "PLAYER 3";
+		case MI_P4: return selMode == 1 ? "RIVAL 2" : "PLAYER 4";
+		case MI_SOUND: return "SOUND";
+		case MI_FULLSCREEN: return "FULLSCREEN";
+		case MI_QUIT: return "QUIT";
+		default: return "";
 	}
 }
 
@@ -187,22 +250,21 @@ static void drawMenu (void)
 
 	drawText((short)(panel.left + 120), (short)(panel.top + 24), "P A R A R E N A  2", IDX_YELLOW);
 
-	static const char *labels[MI_COUNT] = {
-		"START GAME", "GAME", "OPPONENT", "LEAGUE", "PLAY SIDE", "SOUND", "FULLSCREEN", "QUIT"
-	};
+	buildMenuItems();
 	char val[48];
-	for (int i = 0; i < MI_COUNT; i++)
+	for (int i = 0; i < visCount; i++)
 	{
-		short y = (short)(panel.top + 56 + i * 20);
+		int item = visItems[i];
+		short y = (short)(panel.top + 48 + i * 19);
 		unsigned char col = (i == menuSel) ? IDX_YELLOW : IDX_WHITE;
 		drawText((short)(panel.left + 28), y, i == menuSel ? ">" : " ", col);
-		drawText((short)(panel.left + 44), y, labels[i], col);
-		menuValueText(i, val, sizeof val);
+		drawText((short)(panel.left + 44), y, menuItemLabel(item), col);
+		menuValueText(item, val, sizeof val);
 		if (val[0])
 			drawText((short)(panel.left + 170), y, val, col);
 	}
 	drawText((short)(panel.left + 16), (short)(panel.bottom - 14),
-	         "ARROWS: MOVE   RETURN: SELECT   F11: FULLSCREEN", IDX_GRAY);
+	         "ARROWS: MOVE  RETURN: SELECT  F11: FULLSCREEN", IDX_GRAY);
 
 	Index2Color(IDX_BLACK, &c);
 	RGBForeColor(&c);
@@ -211,10 +273,28 @@ static void drawMenu (void)
 
 static void startGame (void)
 {
+	isLeague = (short)selLeague;
+
+	if (selMode > 0)
+	{
+		/* four-player modes run their own loop and return to the menu.
+		 * seat order: 0 = P1 (kb/mouse), 1..3 = the P2..P4 menu rows */
+		int personas[4];
+		personas[0] = kHumanPlayer;
+		for (int i = 0; i < 3; i++)
+			personas[1 + i] = selSeat[i] == 0 ? kHumanPlayer : selSeat[i];
+		whichHumanNumber = 1;
+		PortFourRun(selMode, personas);
+		menuDirty = 1;
+		return;
+	}
+
 	whichGame = gameConsts[selGame];
 	if (whichGame == kTournament)
+	{
 		selLeague = 4;                     /* tournaments are Professional-league */
-	isLeague = (short)selLeague;
+		isLeague = (short)selLeague;
+	}
 	if (portCpuDemo)
 	{
 		leftPlayerNumber = kSimpleGeorge;
@@ -253,12 +333,17 @@ static int keyPressedOnce (int scancode)
 
 static void menuAdjust (int dir)
 {
-	switch (menuSel)
+	buildMenuItems();
+	switch (visItems[menuSel])
 	{
+		case MI_MODE: selMode = (selMode + dir + 4) % 4; buildMenuItems(); break;
 		case MI_GAME: selGame = (selGame + dir + 4) % 4; break;
 		case MI_OPPONENT: selOpponent = (selOpponent + dir + 6) % 6; break;
 		case MI_LEAGUE: selLeague = (selLeague + dir + 5) % 5; break;
 		case MI_SIDE: selSide ^= 1; break;
+		case MI_P2: selSeat[0] = (selSeat[0] + dir + 7) % 7; break;
+		case MI_P3: selSeat[1] = (selSeat[1] + dir + 7) % 7; break;
+		case MI_P4: selSeat[2] = (selSeat[2] + dir + 7) % 7; break;
 		case MI_SOUND: soundOn = !soundOn; break;
 		case MI_FULLSCREEN: PortVideoSetFullscreen(!PortVideoIsFullscreen()); break;
 		default: break;
@@ -268,7 +353,8 @@ static void menuAdjust (int dir)
 
 static void menuActivate (void)
 {
-	switch (menuSel)
+	buildMenuItems();
+	switch (visItems[menuSel])
 	{
 		case MI_START: startGame(); break;
 		case MI_QUIT: quitting = TRUE; break;
@@ -309,6 +395,14 @@ void HandleEvent (void)
 		}
 	}
 
+	if (portFourDemo)
+	{
+		static const int demoSeats[4] = { kSimpleGeorge, kMadMara, kHeavyOtto, kCleverClaire };
+		PortFourRun(portFourDemo, demoSeats);
+		quitting = TRUE;              /* demo run ends after one game */
+		return;
+	}
+
 	if (portCpuDemo)
 	{
 		startGame();
@@ -316,15 +410,19 @@ void HandleEvent (void)
 		return;
 	}
 
-	if (keyPressedOnce(SDL_SCANCODE_UP)) { menuSel = (menuSel + MI_COUNT - 1) % MI_COUNT; menuDirty = 1; }
-	if (keyPressedOnce(SDL_SCANCODE_DOWN)) { menuSel = (menuSel + 1) % MI_COUNT; menuDirty = 1; }
+	buildMenuItems();
+	if (keyPressedOnce(SDL_SCANCODE_UP)) { menuSel = (menuSel + visCount - 1) % visCount; menuDirty = 1; }
+	if (keyPressedOnce(SDL_SCANCODE_DOWN)) { menuSel = (menuSel + 1) % visCount; menuDirty = 1; }
 	if (keyPressedOnce(SDL_SCANCODE_LEFT)) menuAdjust(-1);
 	if (keyPressedOnce(SDL_SCANCODE_RIGHT)) menuAdjust(1);
 	if (keyPressedOnce(SDL_SCANCODE_RETURN) || keyPressedOnce(SDL_SCANCODE_KP_ENTER)
 	    || keyPressedOnce(SDL_SCANCODE_SPACE))
 		menuActivate();
 	if (keyPressedOnce(SDL_SCANCODE_ESCAPE) && !splashIsUp)
-		menuSel = MI_QUIT;
+	{
+		menuSel = visCount - 1;            /* QUIT is always last */
+		menuDirty = 1;
+	}
 
 	/* gamepad menu navigation via polled edges */
 	{
@@ -338,8 +436,8 @@ void HandleEvent (void)
 			r = shimInput.padX > 0.5f;
 			s = shimInput.buttonDown;
 		}
-		if (u && !prevU) { menuSel = (menuSel + MI_COUNT - 1) % MI_COUNT; menuDirty = 1; }
-		if (d && !prevD) { menuSel = (menuSel + 1) % MI_COUNT; menuDirty = 1; }
+		if (u && !prevU) { menuSel = (menuSel + visCount - 1) % visCount; menuDirty = 1; }
+		if (d && !prevD) { menuSel = (menuSel + 1) % visCount; menuDirty = 1; }
 		if (l && !prevL) menuAdjust(-1);
 		if (r && !prevR) menuAdjust(1);
 		if (s && !prevS) menuActivate();

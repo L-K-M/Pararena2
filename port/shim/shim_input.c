@@ -25,7 +25,8 @@
 
 ShimInput shimInput;
 
-static SDL_Gamepad *pad;
+static SDL_Gamepad *pad;              /* first pad (merged single-player input) */
+static SDL_Gamepad *padList[4];       /* all pads by connect order (4P seats) */
 static int inPlayMode;
 static float keyAxisX, keyAxisY;      /* ramped keyboard deflection -1..1 */
 static Uint64 lastPresentNS;
@@ -79,23 +80,29 @@ static void handleEvent (const SDL_Event *ev)
 			}
 			break;
 		case SDL_EVENT_GAMEPAD_ADDED:
-			if (!pad)
+			for (int i = 0; i < 4; i++)
 			{
-				pad = SDL_OpenGamepad(ev->gdevice.which);
-				if (pad)
-				{
-					shimInput.padConnected = 1;
-					ShimLog("gamepad connected: %s", SDL_GetGamepadName(pad));
-				}
+				if (padList[i])
+					continue;
+				padList[i] = SDL_OpenGamepad(ev->gdevice.which);
+				if (padList[i])
+					ShimLog("gamepad %d connected: %s", i + 1, SDL_GetGamepadName(padList[i]));
+				break;
 			}
+			pad = padList[0];
+			shimInput.padConnected = (pad != NULL);
 			break;
 		case SDL_EVENT_GAMEPAD_REMOVED:
-			if (pad && ev->gdevice.which == SDL_GetGamepadID(pad))
+			for (int i = 0; i < 4; i++)
 			{
-				SDL_CloseGamepad(pad);
-				pad = NULL;
-				shimInput.padConnected = 0;
+				if (padList[i] && ev->gdevice.which == SDL_GetGamepadID(padList[i]))
+				{
+					SDL_CloseGamepad(padList[i]);
+					padList[i] = NULL;
+				}
 			}
+			pad = padList[0];
+			shimInput.padConnected = (pad != NULL);
 			break;
 		case SDL_EVENT_KEY_DOWN:
 			if (ev->key.key == SDLK_F11 ||
@@ -128,10 +135,11 @@ void ShimPumpEvents (void)
 	keyAxisX += (tx - keyAxisX) * rate;
 	keyAxisY += (ty - keyAxisY) * rate;
 
-	/* gamepad stick (absolute deflection) */
+	/* gamepad stick (absolute deflection); in split-input (4P) mode the pads
+	 * belong to their own seats and stay out of the merged state */
 	float px = 0, py = 0;
 	int padActive = 0;
-	if (pad)
+	if (pad && !shimInput.splitInputs)
 	{
 		px = (float)SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
 		py = (float)SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
@@ -169,7 +177,7 @@ void ShimPumpEvents (void)
 	if (ks[SDL_SCANCODE_X]) shimInput.buttonDown = 1;
 	if (ks[SDL_SCANCODE_SPACE]) shimInput.brakeDown = 1;
 	if (ks[SDL_SCANCODE_B] || ks[SDL_SCANCODE_N] || ks[SDL_SCANCODE_M]) shimInput.bashDown = 1;
-	if (pad)
+	if (pad && !shimInput.splitInputs)
 	{
 		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_SOUTH)) shimInput.buttonDown = 1;
 		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST)) shimInput.brakeDown = 1;
@@ -226,6 +234,31 @@ void GetKeys (KeyMap theKeys)
 		setKeyBit(km, kCommand, 1);
 		setKeyBit(km, kQ, 1);
 	}
+}
+
+/* per-pad state for the 4P seats (deadzone + d-pad override like the merged path) */
+int ShimPadRead (int idx, float *x, float *y, int *btn, int *brake, int *bash)
+{
+	*x = *y = 0;
+	*btn = *brake = *bash = 0;
+	if (idx < 0 || idx >= 4 || !padList[idx])
+		return 0;
+	SDL_Gamepad *p = padList[idx];
+	float px = (float)SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
+	float py = (float)SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
+	if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_DPAD_LEFT))  px = -1;
+	if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) px = 1;
+	if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_DPAD_UP))    py = -1;
+	if (SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_DPAD_DOWN))  py = 1;
+	if (px < 0.12f && px > -0.12f) px = 0;
+	if (py < 0.12f && py > -0.12f) py = 0;
+	*x = px;
+	*y = py;
+	*btn = SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_SOUTH);
+	*brake = SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_EAST) ||
+	         SDL_GetGamepadAxis(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 8192;
+	*bash = SDL_GetGamepadButton(p, SDL_GAMEPAD_BUTTON_WEST);
+	return 1;
 }
 
 Boolean Button (void)

@@ -30,6 +30,29 @@ The asset pack (`assets/pararena2.dat`) is committed; it can be
 regenerated any time from the original `Pararena.project.r` /
 `Para Sounds.bin` with `python3 tools/build_assets.py`.
 
+## Four-player modes
+
+The MODE row in the menu selects, besides the classic 1v1:
+
+- **2 VS 2** — team play on the classic goals with standard-game rules
+  (11 points, win by 2, three fouls concede a point). Teammates share a
+  hoverboard color; the two big scoreboards show the team scores.
+- **FFA - 2 GOALS** — everyone against everyone. Each goal *belongs* to one
+  player at a time (its band is painted in their color) and scores for its
+  owner no matter who throws the ball in; ownership rotates every 12 seconds
+  (and right after a goal). First to 7 wins.
+- **FFA - 4 GOALS** — everyone against everyone with four goals, one per
+  player, at the four rim corners (the force table's mirror symmetry
+  provides the southern pair). Score into *your* goal; defend it from the
+  other three. First to 7 wins.
+
+Player 1 plays with the keyboard/mouse; the P2-P4 seats can be humans on
+gamepads (assigned in connect order) or any of the six AI personas.
+Instant replay is disabled in four-player games for now.
+
+`--four-demo N` (1=2v2, 2=FFA-2, 3=FFA-4) watches an all-AI four-player
+game, like `--cpu-demo` does for 1v1.
+
 ## Controls
 
 | Action | Keyboard / mouse | Gamepad |
