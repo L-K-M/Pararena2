@@ -1,0 +1,49 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure (console SDL build for headless CI)
+        run: |
+          cmake -S port -B port/build -DCMAKE_BUILD_TYPE=Release \
+                -DSDL_UNIX_CONSOLE_BUILD=ON -DSDL_X11=OFF -DSDL_WAYLAND=OFF
+      - name: Build
+        run: cmake --build port/build -j
+      - name: Smoke test (CPU vs CPU, headless)
+        run: |
+          cd port
+          ./build/pararena2 --headless --cpu-demo --frames 1200 --fast 8
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S port -B port/build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build port/build -j
+      - name: Smoke test (CPU vs CPU, headless)
+        run: |
+          cd port
+          ./build/pararena2 --headless --cpu-demo --frames 1200 --fast 8
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S port -B port/build
+      - name: Build
+        run: cmake --build port/build --config Release -j
+      - name: Smoke test (CPU vs CPU, headless)
+        shell: bash
+        run: |
+          cd port
+          ./build/Release/pararena2.exe --headless --cpu-demo --frames 1200 --fast 8

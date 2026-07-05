@@ -614,6 +614,7 @@ void ShimVideoInit (int w, int h)
 	shimScreenPort.fgIndex = IDX_BLACK;
 	shimScreenPort.bkIndex = IDX_WHITE;
 	shimScreenPort.pnMode = patCopy;
+	shimScreenPort.txMode = srcOr;         /* QuickDraw's default text mode */
 	memcpy(shimScreenPort.pnPat, black, 8);
 	shimScreenPort.visRgn = makeScreenRgn();
 	shimScreenPort.clipRgn = makeScreenRgn();

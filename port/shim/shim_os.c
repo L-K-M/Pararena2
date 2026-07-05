@@ -181,11 +181,14 @@ OSErr FSClose (short refNum) { (void)refNum; return -1; }
 
 void ShimMaybeDumpFrame (void)
 {
-	if (!shimFrameDumpDir || Ticks == lastDumpTick || (Ticks % shimFrameDumpEvery) != 0)
+	if (!shimFrameDumpDir)
 		return;
-	lastDumpTick = Ticks;
+	long bucket = lastTickSeen / shimFrameDumpEvery;
+	if (bucket == lastDumpTick)
+		return;
+	lastDumpTick = bucket;
 	char path[512];
-	snprintf(path, sizeof path, "%s/frame_%06ld.ppm", shimFrameDumpDir, (long)Ticks);
+	snprintf(path, sizeof path, "%s/frame_%06ld.ppm", shimFrameDumpDir, lastTickSeen);
 	FILE *f = fopen(path, "wb");
 	if (!f)
 		return;

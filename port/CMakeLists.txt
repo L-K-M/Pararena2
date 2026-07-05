@@ -95,11 +95,14 @@ target_include_directories(pararena2 PRIVATE
 target_link_libraries(pararena2 PRIVATE SDL3::SDL3)
 
 # every original file gets the shim force-included and main renamed
+if(MSVC)
+    set(GAME_FLAGS "/FIMacShim.h;/Dmain=PararenaMain;/wd4068")
+else()
+    set(GAME_FLAGS "-include;MacShim.h;-Dmain=PararenaMain;-Wno-multichar;-Wno-parentheses;-Wno-comment;-Wno-dangling-else")
+    target_compile_options(pararena2 PRIVATE -fsigned-char)
+endif()
 set_source_files_properties(${CONVERTED_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "-include;MacShim.h;-Dmain=PararenaMain;-Wno-multichar;-Wno-parentheses;-Wno-comment;-Wno-dangling-else"
-)
-
-target_compile_options(pararena2 PRIVATE -fsigned-char)
+    COMPILE_OPTIONS "${GAME_FLAGS}")
 
 # copy the asset pack next to the binary
 add_custom_command(TARGET pararena2 POST_BUILD

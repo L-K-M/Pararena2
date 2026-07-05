@@ -38,6 +38,7 @@ static void portSetup (GrafPtr p, BitMap *bm)
 	p->fgIndex = 15;               /* black */
 	p->bkIndex = 0;                /* white */
 	p->pnMode = 8;                 /* patCopy */
+	p->txMode = srcOr;
 	memset(p->pnPat, 0xFF, 8);
 }
 

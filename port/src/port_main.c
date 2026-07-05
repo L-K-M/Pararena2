@@ -3,6 +3,7 @@
  */
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #include "shim_internal.h"
 
 int PararenaMain (void);          /* Sources/Main.c, renamed via -Dmain= */
@@ -77,7 +78,10 @@ int main (int argc, char **argv)
 	}
 
 	if (shimHeadless)
+	{
 		SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
+		SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
+	}
 
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS))
 	{

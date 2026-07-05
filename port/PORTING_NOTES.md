@@ -53,11 +53,12 @@ DumpPict.c, Abandoned Routines.c.
   when the next tick is far, so the busy-wait doesn't burn a core.
 - **Input:** a *virtual cursor* replaces the warped hardware mouse.
   Deflection sources (combined): relative mouse motion (SDL relative mode),
-  gamepad left stick (deflection = stick × frame half-width), arrow keys / WASD
-  (ramped). `Button()` = LMB / gamepad South / X key or Right Ctrl.
-  Brake = Space / gamepad trigger or East button. Bash = B/N/M / gamepad West.
-  `GetKeys` also synthesizes the Mac keymap bits PlayCore polls (Q/E/Tab/S/R,
-  command = Ctrl/⌘).
+  gamepad left stick / d-pad (deflection = stick × frame half-width), arrow
+  keys (ramped; WASD is not used because S/B/N/M/R/E are game keys).
+  `Button()` = LMB / gamepad South / X key. Brake = Space / gamepad East or
+  right trigger. Bash = B/N/M / gamepad West. `GetKeys` also synthesizes the
+  Mac keymap bits PlayCore polls (Q/E/Tab/S/R, command = Ctrl/⌘; Esc maps to
+  Cmd+E "end game", window-close to Cmd+Q).
 - **Sound:** 4-voice mixer implementing the disassembled SMS semantics
   (priority stealing: steal lowest priority ≤ new, else drop; `SMSSTARTCHAN`
   always preempts; loop when repeat = 0x7FFF). Clips are unsigned 8-bit mono
@@ -85,6 +86,20 @@ DumpPict.c, Abandoned Routines.c.
 
 Pack format: `"PAR2"`, u32 version, u32 count, then TOC entries
 (u32 fourcc, s32 id, u32 offset, u32 size, u32 w, u32 h, u32 flags).
+
+## Shim subtleties discovered while bringing it up
+
+- QuickDraw's default text transfer mode is `srcOr`; a zeroed port would
+  default to `srcCopy` (mode 0) and paint glyph background cells.
+- Several loops spin on `Ticks` with empty bodies (e.g. `DisplayHoopla`), so
+  `Ticks` must advance on *every read*, not just when events are pumped; the
+  read also yields the CPU after ~200 same-tick reads.
+- `CGrafPort` is typedef'd to `GrafPort` (with a vestigial `portPixMap` field)
+  so both `((GrafPtr)offCPartsPtr)->portBits` and `DumpPict`'s
+  `(*ptr).portPixMap` compile against one struct.
+- Alert dialogs return button 1 ("default") — the tournament-abort
+  confirmation is therefore skipped; a future in-game confirm overlay could
+  restore it.
 
 ## Verification strategy (headless container)
 
