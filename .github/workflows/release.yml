@@ -90,6 +90,7 @@ jobs:
         shell: bash
         run: |
           BIN="${{ steps.bin.outputs.path }}"
+          DAT="$(dirname "$BIN")/pararena2.dat"
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="$GITHUB_REF_NAME"
           else
@@ -97,8 +98,26 @@ jobs:
           fi
           NAME="pararena2-$VERSION-${{ matrix.name }}"
           mkdir -p "stage/pararena2"
-          cp "$BIN" "stage/pararena2/"
-          cp "$(dirname "$BIN")/pararena2.dat" "stage/pararena2/"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            # Ship a double-clickable .app instead of a bare Unix binary. The binary is
+            # the static universal build, so it needs no dylibs alongside; the asset pack
+            # goes in Contents/Resources, which is what SDL_GetBasePath() returns for a
+            # bundle, so the port's existing search resolves it. An ad-hoc signature
+            # (identity "-") is what lets a universal app launch on Apple Silicon — it is
+            # NOT a Developer ID signature and is not notarized, so Gatekeeper still warns
+            # on first open (the release notes explain how to bypass that).
+            APP="stage/pararena2/Pararena2.app"
+            mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+            cp "$BIN" "$APP/Contents/MacOS/pararena2"
+            cp "$DAT" "$APP/Contents/Resources/pararena2.dat"
+            sed "s/__VERSION__/${VERSION#v}/g" port/macos/Info.plist > "$APP/Contents/Info.plist"
+            plutil -lint "$APP/Contents/Info.plist"
+            codesign --force --sign - "$APP"
+            codesign --verify --strict "$APP"
+          else
+            cp "$BIN" "stage/pararena2/"
+            cp "$DAT" "stage/pararena2/"
+          fi
           cp port/README.md "stage/pararena2/README.md"
           cp LICENSE "stage/pararena2/"
           if [ "$RUNNER_OS" = "Windows" ]; then
@@ -109,9 +128,12 @@ jobs:
             echo "file=$NAME.tar.gz" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Verify macOS universal binary
+      - name: Verify macOS universal .app binary
         if: runner.os == 'macOS'
-        run: lipo -info stage/pararena2/pararena2 | tee /dev/stderr | grep -q "arm64" && lipo -info stage/pararena2/pararena2 | grep -q "x86_64"
+        run: |
+          BIN="stage/pararena2/Pararena2.app/Contents/MacOS/pararena2"
+          lipo -info "$BIN" | tee /dev/stderr | grep -q "arm64"
+          lipo -info "$BIN" | grep -q "x86_64"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -134,3 +156,15 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          body: |
+            ### macOS
+
+            The macOS download (`*-macos-universal.tar.gz`) contains **Pararena2.app**, a
+            universal (Apple Silicon + Intel) bundle. It is ad-hoc signed but **not**
+            notarized, so Gatekeeper warns on first launch. To open it:
+
+            - **Right-click** (or Control-click) Pararena2.app → **Open** → **Open**, or
+            - `xattr -dr com.apple.quarantine /path/to/Pararena2.app`
+
+            Linux and Windows downloads contain a self-contained `pararena2` binary with
+            its asset pack alongside — unpack and run.
