@@ -17,6 +17,7 @@
 /* provided by port_shell.c (transcribed from TeamSetUp.c) */
 void WhosOnFirst (void);
 void PortInputSetPlayMode (int playing);
+void PortShellSyncFromPrefs (void);
 
 static uint8_t *portAlloc (BitMap *bm, int w, int h)
 {
@@ -166,6 +167,7 @@ void InitializeAll (void)
 	canNetwork = FALSE;
 	if (theOpponent.persona == kNetHuman)
 		theOpponent.persona = kMissTeak;
+	PortShellSyncFromPrefs();      /* seed the menu from the loaded prefs */
 
 	LoadLargeDataStructures();     /* verbatim: forc/vert/sPts via GetResource */
 	VarInit();                     /* verbatim: all rects, mouseFrame, replay buffer */
