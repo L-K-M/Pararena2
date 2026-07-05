@@ -10,6 +10,27 @@
 #ifndef MACSHIM_H
 #define MACSHIM_H
 
+/* ---- Win32 name collisions ----
+ * These classic QuickDraw/Toolbox names are also exported by user32.dll /
+ * gdi32.dll. When SDL is linked statically the import libraries land on our
+ * link line and the linker sees two definitions (LNK2005). Rename our
+ * versions everywhere — every translation unit sees this header first, so
+ * declaration, definition, and every call site rename together. */
+#define FillRect    ShimQD_FillRect
+#define FrameRect   ShimQD_FrameRect
+#define InvertRect  ShimQD_InvertRect
+#define OffsetRect  ShimQD_OffsetRect
+#define UnionRect   ShimQD_UnionRect
+#define PtInRect    ShimQD_PtInRect
+#define LineTo      ShimQD_LineTo
+#define PaintRgn    ShimQD_PaintRgn
+#define FillRgn     ShimQD_FillRgn
+#define OffsetRgn   ShimQD_OffsetRgn
+#define SetRectRgn  ShimQD_SetRectRgn
+#define ShowWindow  ShimQD_ShowWindow
+#define ShowCursor  ShimQD_ShowCursor
+#define DrawMenuBar ShimQD_DrawMenuBar
+
 /* ---- keywords / basic macros ---- */
 #define pascal
 #ifndef nil

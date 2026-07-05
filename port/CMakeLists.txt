@@ -98,7 +98,9 @@ target_link_libraries(pararena2 PRIVATE SDL3::SDL3)
 if(MSVC)
     set(GAME_FLAGS "/FIMacShim.h;/Dmain=PararenaMain;/wd4068")
 else()
-    set(GAME_FLAGS "-include;MacShim.h;-Dmain=PararenaMain;-Wno-multichar;-Wno-parentheses;-Wno-comment;-Wno-dangling-else")
+    # newer clang (Xcode 16+) makes implicit-int a hard error; the 1992
+    # sources declare main() K&R-style, so demote it back to a warning
+    set(GAME_FLAGS "-include;MacShim.h;-Dmain=PararenaMain;-Wno-multichar;-Wno-parentheses;-Wno-comment;-Wno-dangling-else;-Wno-error=implicit-int;-Wno-error=implicit-function-declaration")
     target_compile_options(pararena2 PRIVATE -fsigned-char)
 endif()
 set_source_files_properties(${CONVERTED_SOURCES} PROPERTIES
