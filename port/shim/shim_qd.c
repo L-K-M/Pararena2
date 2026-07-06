@@ -99,6 +99,25 @@ void CopyMask (const BitMap *srcBits, const BitMap *maskBits, const BitMap *dstB
 	if (!clip2(srcBits, dstBits, &sx, &sy, &dx, &dy, &w, &h))
 		return;
 	mx += sx - sx0;  my += sy - sy0;
+	/* clip against the mask bitmap too — it can be smaller than the source
+	 * sheet (the color mask sheet is 320 px wide vs. the 400 px parts sheet),
+	 * and a mask rect past its edge would read out of bounds */
+	if (mx < maskBits->bounds.left)
+	{
+		int d = maskBits->bounds.left - mx;
+		mx += d; sx += d; dx += d; w -= d;
+	}
+	if (my < maskBits->bounds.top)
+	{
+		int d = maskBits->bounds.top - my;
+		my += d; sy += d; dy += d; h -= d;
+	}
+	if (mx + w > maskBits->bounds.right)
+		w = maskBits->bounds.right - mx;
+	if (my + h > maskBits->bounds.bottom)
+		h = maskBits->bounds.bottom - my;
+	if (w <= 0 || h <= 0)
+		return;
 	for (int y = 0; y < h; y++)
 	{
 		const uint8_t *s = bmAddr(srcBits, sx, sy + y);
