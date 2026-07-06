@@ -29,6 +29,10 @@ int PortVideoOpen (int w, int h, int startFullscreen)
 		ShimLog("SDL_CreateRenderer failed: %s", SDL_GetError());
 		return 0;
 	}
+	/* vsync stops tearing and cannot slow the game down: Ticks are derived
+	 * from the wall clock, so a blocking present just consumes idle budget */
+	if (!SDL_SetRenderVSync(ren, SDL_RENDERER_VSYNC_ADAPTIVE))
+		SDL_SetRenderVSync(ren, 1);
 	SDL_SetRenderLogicalPresentation(ren, w, h, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 	tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ABGR8888,
 	                        SDL_TEXTUREACCESS_STREAMING, w, h);
