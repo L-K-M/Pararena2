@@ -18,13 +18,20 @@
 
 void PortInputSetPlayMode (int playing);
 
+extern short soundVolume;     /* declared in ConfigureSound.h (not included here) */
+
 int portCpuDemo = 0;          /* --cpu-demo: auto-start George vs Mara */
 
-/* menu model */
-enum { MI_START, MI_GAME, MI_OPPONENT, MI_LEAGUE, MI_SIDE, MI_SOUND, MI_FULLSCREEN, MI_QUIT, MI_COUNT };
+/* menu model: a main page and an options page */
+enum { PAGE_MAIN, PAGE_OPTIONS };
+enum { MI_START, MI_GAME, MI_OPPONENT, MI_LEAGUE, MI_SIDE, MI_OPTIONS, MI_QUIT, MI_COUNT };
+enum { OI_VOLUME, OI_SOUND, OI_CURSOR, OI_ANNOUNCER, OI_RGOALS, OI_RFOULS, OI_RKEY,
+       OI_FULLSCREEN, OI_BACK, OI_COUNT };
+static int menuPage = PAGE_MAIN;
 static int menuSel = MI_START;
+static int optSel = OI_VOLUME;
 static int selGame = 0;        /* 0 standard, 1 tournament, 2 boardin', 3 scorin' */
-static int selOpponent = 5;    /* persona-1: default Ms. Teak (index 5 = persona 6) */
+static int selOpponent = 0;    /* persona-1: default Simple George (the game's own default) */
 static int selLeague = 4;      /* professional */
 static int selSide = 0;        /* 0 = defend left goal */
 static int wasPlaying = 0;
@@ -34,6 +41,21 @@ static const char *gameNames[4] = { "STANDARD GAME", "TOURNAMENT", "PRACTICE BOA
 static const short gameConsts[4] = { kStandardGame, kTournament, kPracticeBoardin, kPracticeScoring };
 static const char *oppNames[6] = { "SIMPLE GEORGE", "MAD MARA", "HEAVY OTTO", "CLEVER CLAIRE", "MR. EAZE", "MS. TEAK" };
 static const char *leagueNames[5] = { "LITTLE LEAGUE", "JUNIOR VARSITY", "VARSITY", "MINOR LEAGUE", "PROFESSIONAL" };
+
+/* seed the menu from the loaded preferences so game/opponent/league/side
+ * actually persist across launches (startGame writes them back to the
+ * globals, and DumpTheDefaults saves the globals on quit) */
+void PortShellSyncFromPrefs (void)
+{
+	for (int i = 0; i < 4; i++)
+		if (gameConsts[i] == whichGame)
+			selGame = i;
+	if (theOpponent.persona >= kSimpleGeorge && theOpponent.persona <= kMissTeak)
+		selOpponent = theOpponent.persona - 1;
+	if (isLeague >= kLittleLeague && isLeague <= kProfessional)
+		selLeague = isLeague;
+	selSide = leftGoalIsPlayers ? 0 : 1;
+}
 
 /* ------------------------------------------------------------------ */
 /* WhosOnFirst — transcribed verbatim from Sources/TeamSetUp.c (the rest
@@ -157,8 +179,22 @@ static void menuValueText (int item, char *buf, size_t bufsz)
 		case MI_OPPONENT: snprintf(buf, bufsz, "%s", oppNames[selOpponent]); break;
 		case MI_LEAGUE: snprintf(buf, bufsz, "%s", leagueNames[selLeague]); break;
 		case MI_SIDE: snprintf(buf, bufsz, "%s", selSide == 0 ? "LEFT GOAL" : "RIGHT GOAL"); break;
-		case MI_SOUND: snprintf(buf, bufsz, "%s", soundOn ? "ON" : "OFF"); break;
-		case MI_FULLSCREEN: snprintf(buf, bufsz, "%s", PortVideoIsFullscreen() ? "ON" : "OFF"); break;
+		default: buf[0] = 0; break;
+	}
+}
+
+static void optionValueText (int item, char *buf, size_t bufsz)
+{
+	switch (item)
+	{
+		case OI_VOLUME: snprintf(buf, bufsz, "%d", soundVolume); break;
+		case OI_SOUND: snprintf(buf, bufsz, "%s", soundOn ? "ON" : "OFF"); break;
+		case OI_CURSOR: snprintf(buf, bufsz, "%s", showBoardCursor ? "ON" : "OFF"); break;
+		case OI_ANNOUNCER: snprintf(buf, bufsz, "%s", enableAnnouncer ? "ON" : "OFF"); break;
+		case OI_RGOALS: snprintf(buf, bufsz, "%s", replayGoals ? "ON" : "OFF"); break;
+		case OI_RFOULS: snprintf(buf, bufsz, "%s", replayFouls ? "ON" : "OFF"); break;
+		case OI_RKEY: snprintf(buf, bufsz, "%s", replayOnR ? "ON" : "OFF"); break;
+		case OI_FULLSCREEN: snprintf(buf, bufsz, "%s", PortVideoIsFullscreen() ? "ON" : "OFF"); break;
 		default: buf[0] = 0; break;
 	}
 }
@@ -187,22 +223,42 @@ static void drawMenu (void)
 
 	drawText((short)(panel.left + 120), (short)(panel.top + 24), "P A R A R E N A  2", IDX_YELLOW);
 
-	static const char *labels[MI_COUNT] = {
-		"START GAME", "GAME", "OPPONENT", "LEAGUE", "PLAY SIDE", "SOUND", "FULLSCREEN", "QUIT"
+	static const char *mainLabels[MI_COUNT] = {
+		"START GAME", "GAME", "OPPONENT", "LEAGUE", "PLAY SIDE", "OPTIONS...", "QUIT"
+	};
+	static const char *optLabels[OI_COUNT] = {
+		"VOLUME", "SOUND", "BOARD CURSOR", "ANNOUNCER", "REPLAY GOALS",
+		"REPLAY FOULS", "REPLAY KEY R", "FULLSCREEN", "BACK"
 	};
 	char val[48];
-	for (int i = 0; i < MI_COUNT; i++)
+	if (menuPage == PAGE_MAIN)
 	{
-		short y = (short)(panel.top + 56 + i * 20);
-		unsigned char col = (i == menuSel) ? IDX_YELLOW : IDX_WHITE;
-		drawText((short)(panel.left + 28), y, i == menuSel ? ">" : " ", col);
-		drawText((short)(panel.left + 44), y, labels[i], col);
-		menuValueText(i, val, sizeof val);
-		if (val[0])
-			drawText((short)(panel.left + 170), y, val, col);
+		for (int i = 0; i < MI_COUNT; i++)
+		{
+			short y = (short)(panel.top + 56 + i * 20);
+			unsigned char col = (i == menuSel) ? IDX_YELLOW : IDX_WHITE;
+			drawText((short)(panel.left + 28), y, i == menuSel ? ">" : " ", col);
+			drawText((short)(panel.left + 44), y, mainLabels[i], col);
+			menuValueText(i, val, sizeof val);
+			if (val[0])
+				drawText((short)(panel.left + 170), y, val, col);
+		}
+	}
+	else
+	{
+		for (int i = 0; i < OI_COUNT; i++)
+		{
+			short y = (short)(panel.top + 46 + i * 18);
+			unsigned char col = (i == optSel) ? IDX_YELLOW : IDX_WHITE;
+			drawText((short)(panel.left + 28), y, i == optSel ? ">" : " ", col);
+			drawText((short)(panel.left + 44), y, optLabels[i], col);
+			optionValueText(i, val, sizeof val);
+			if (val[0])
+				drawText((short)(panel.left + 190), y, val, col);
+		}
 	}
 	drawText((short)(panel.left + 16), (short)(panel.bottom - 14),
-	         "ARROWS: MOVE   RETURN: SELECT   F11: FULLSCREEN", IDX_GRAY);
+	         "ARROWS: MOVE  RETURN: SELECT  F11: FULLSCREEN", IDX_GRAY);
 
 	Index2Color(IDX_BLACK, &c);
 	RGBForeColor(&c);
@@ -240,6 +296,15 @@ static void startGame (void)
 	menuDirty = 1;
 }
 
+static void menuMoveSel (int dir)
+{
+	if (menuPage == PAGE_MAIN)
+		menuSel = (menuSel + MI_COUNT + dir) % MI_COUNT;
+	else
+		optSel = (optSel + OI_COUNT + dir) % OI_COUNT;
+	menuDirty = 1;
+}
+
 /* edge-detected shell key handling */
 static int keyPressedOnce (int scancode)
 {
@@ -253,26 +318,67 @@ static int keyPressedOnce (int scancode)
 
 static void menuAdjust (int dir)
 {
-	switch (menuSel)
+	if (menuPage == PAGE_MAIN)
 	{
-		case MI_GAME: selGame = (selGame + dir + 4) % 4; break;
-		case MI_OPPONENT: selOpponent = (selOpponent + dir + 6) % 6; break;
-		case MI_LEAGUE: selLeague = (selLeague + dir + 5) % 5; break;
-		case MI_SIDE: selSide ^= 1; break;
-		case MI_SOUND: soundOn = !soundOn; break;
-		case MI_FULLSCREEN: PortVideoSetFullscreen(!PortVideoIsFullscreen()); break;
-		default: break;
+		switch (menuSel)
+		{
+			case MI_GAME: selGame = (selGame + dir + 4) % 4; break;
+			case MI_OPPONENT: selOpponent = (selOpponent + dir + 6) % 6; break;
+			case MI_LEAGUE: selLeague = (selLeague + dir + 5) % 5; break;
+			case MI_SIDE: selSide ^= 1; break;
+			default: break;
+		}
+	}
+	else
+	{
+		switch (optSel)
+		{
+			case OI_VOLUME:
+				soundVolume = (short)(soundVolume + dir);
+				if (soundVolume < 0) soundVolume = 0;
+				if (soundVolume > 7) soundVolume = 7;
+				SetSoundVol(soundVolume);
+				if (soundOn)
+				{
+					extern void SMSSTART (short);
+					SMSSTART(kBallPickUpSound);      /* audible level check */
+				}
+				break;
+			case OI_SOUND: soundOn = !soundOn; break;
+			case OI_CURSOR: showBoardCursor = !showBoardCursor; break;
+			case OI_ANNOUNCER: enableAnnouncer = !enableAnnouncer; break;
+			case OI_RGOALS: replayGoals = !replayGoals; break;
+			case OI_RFOULS: replayFouls = !replayFouls; break;
+			case OI_RKEY: replayOnR = !replayOnR; break;
+			case OI_FULLSCREEN: PortVideoSetFullscreen(!PortVideoIsFullscreen()); break;
+			default: break;
+		}
+		replaySomething = replayGoals || replayFouls || replayOnR;
 	}
 	menuDirty = 1;
 }
 
 static void menuActivate (void)
 {
-	switch (menuSel)
+	if (menuPage == PAGE_MAIN)
 	{
-		case MI_START: startGame(); break;
-		case MI_QUIT: quitting = TRUE; break;
-		default: menuAdjust(1); break;
+		switch (menuSel)
+		{
+			case MI_START: startGame(); break;
+			case MI_OPTIONS: menuPage = PAGE_OPTIONS; optSel = OI_VOLUME; menuDirty = 1; break;
+			case MI_QUIT: quitting = TRUE; break;
+			default: menuAdjust(1); break;
+		}
+	}
+	else
+	{
+		if (optSel == OI_BACK)
+		{
+			menuPage = PAGE_MAIN;
+			menuDirty = 1;
+		}
+		else
+			menuAdjust(1);
 	}
 }
 
@@ -327,15 +433,21 @@ void HandleEvent (void)
 		return;
 	}
 
-	if (keyPressedOnce(SDL_SCANCODE_UP)) { menuSel = (menuSel + MI_COUNT - 1) % MI_COUNT; menuDirty = 1; }
-	if (keyPressedOnce(SDL_SCANCODE_DOWN)) { menuSel = (menuSel + 1) % MI_COUNT; menuDirty = 1; }
+	if (keyPressedOnce(SDL_SCANCODE_UP)) menuMoveSel(-1);
+	if (keyPressedOnce(SDL_SCANCODE_DOWN)) menuMoveSel(1);
 	if (keyPressedOnce(SDL_SCANCODE_LEFT)) menuAdjust(-1);
 	if (keyPressedOnce(SDL_SCANCODE_RIGHT)) menuAdjust(1);
 	if (keyPressedOnce(SDL_SCANCODE_RETURN) || keyPressedOnce(SDL_SCANCODE_KP_ENTER)
 	    || keyPressedOnce(SDL_SCANCODE_SPACE))
 		menuActivate();
 	if (keyPressedOnce(SDL_SCANCODE_ESCAPE) && !splashIsUp)
-		menuSel = MI_QUIT;
+	{
+		if (menuPage == PAGE_OPTIONS)
+			menuPage = PAGE_MAIN;
+		else
+			menuSel = MI_QUIT;
+		menuDirty = 1;
+	}
 
 	/* gamepad menu navigation via polled edges */
 	{
@@ -349,8 +461,8 @@ void HandleEvent (void)
 			r = shimInput.padX > 0.5f;
 			s = shimInput.buttonDown;
 		}
-		if (u && !prevU) { menuSel = (menuSel + MI_COUNT - 1) % MI_COUNT; menuDirty = 1; }
-		if (d && !prevD) { menuSel = (menuSel + 1) % MI_COUNT; menuDirty = 1; }
+		if (u && !prevU) menuMoveSel(-1);
+		if (d && !prevD) menuMoveSel(1);
 		if (l && !prevL) menuAdjust(-1);
 		if (r && !prevR) menuAdjust(1);
 		if (s && !prevS) menuActivate();
