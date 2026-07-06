@@ -31,6 +31,21 @@ static int inPlayMode;
 static float keyAxisX, keyAxisY;      /* ramped keyboard deflection -1..1 */
 static Uint64 lastPresentNS;
 
+/* ---- touchscreen (Android) virtual controls ----
+ * Play mode: the left half is a relative "skate" joystick (drag from wherever
+ * the finger lands), the right half is CATCH/THROW (upper) and BRAKE (lower).
+ * Menu mode: a tap in the top / middle / bottom third means up / select / down.
+ * SDL's touch->mouse synthesis is disabled (a hint in port_main.c) so this is
+ * the sole owner of the deflection while touching. */
+#define TOUCH_MAX 8
+#define TOUCH_RADIUS 0.16f            /* normalized drag distance for full tilt */
+static SDL_FingerID tfId[TOUCH_MAX];  /* button fingers (right half) */
+static int          tfKind[TOUCH_MAX];/* 1 = catch, 2 = brake */
+static int          tfN;
+static int          moveOn;           /* a movement finger is down (left half) */
+static SDL_FingerID moveId;
+static float        moveAnchorX, moveAnchorY, moveDefX, moveDefY;
+
 extern void ShimTickSleep (void);
 extern void ShimTimeInit (void);
 
@@ -58,12 +73,71 @@ void PortInputSetPlayMode (int playing)
 	shimInput.virtualMouse.h = screenBits.bounds.right / 2;
 	shimInput.virtualMouse.v = screenBits.bounds.bottom / 2;
 	keyAxisX = keyAxisY = 0;
+	moveOn = 0; tfN = 0; moveDefX = moveDefY = 0;
+}
+
+static void touchDown (SDL_FingerID id, float x, float y)
+{
+	if (!inPlayMode)
+	{
+		if (y < 0.34f)      shimInput.menuTapUp = 1;
+		else if (y > 0.66f) shimInput.menuTapDown = 1;
+		else                shimInput.menuTapSelect = 1;
+		return;
+	}
+	if (x < 0.5f)                              /* left half: movement joystick */
+	{
+		if (!moveOn) { moveOn = 1; moveId = id; moveAnchorX = x; moveAnchorY = y; moveDefX = moveDefY = 0; }
+		return;
+	}
+	if (tfN < TOUCH_MAX)                        /* right half: a button finger */
+	{
+		tfId[tfN] = id;
+		tfKind[tfN] = (y < 0.5f) ? 1 : 2;      /* upper = catch, lower = brake */
+		tfN++;
+	}
+}
+
+static void touchMotion (SDL_FingerID id, float x, float y)
+{
+	if (moveOn && id == moveId)
+	{
+		moveDefX = (x - moveAnchorX) / TOUCH_RADIUS;
+		moveDefY = (y - moveAnchorY) / TOUCH_RADIUS;
+		if (moveDefX >  1) moveDefX =  1;
+		if (moveDefX < -1) moveDefX = -1;
+		if (moveDefY >  1) moveDefY =  1;
+		if (moveDefY < -1) moveDefY = -1;
+	}
+}
+
+static void touchUp (SDL_FingerID id)
+{
+	if (moveOn && id == moveId) { moveOn = 0; moveDefX = moveDefY = 0; return; }
+	for (int i = 0; i < tfN; i++)
+		if (tfId[i] == id)
+		{
+			tfId[i] = tfId[tfN - 1];
+			tfKind[i] = tfKind[tfN - 1];
+			tfN--;
+			break;
+		}
 }
 
 static void handleEvent (const SDL_Event *ev)
 {
 	switch (ev->type)
 	{
+		case SDL_EVENT_FINGER_DOWN:
+			touchDown(ev->tfinger.fingerID, ev->tfinger.x, ev->tfinger.y);
+			break;
+		case SDL_EVENT_FINGER_MOTION:
+			touchMotion(ev->tfinger.fingerID, ev->tfinger.x, ev->tfinger.y);
+			break;
+		case SDL_EVENT_FINGER_UP:
+		case SDL_EVENT_FINGER_CANCELED:
+			touchUp(ev->tfinger.fingerID);
+			break;
 		case SDL_EVENT_QUIT:
 			shimInput.quitRequested = 1;
 			break;
@@ -163,6 +237,9 @@ void ShimPumpEvents (void)
 		shimInput.padY = py;
 	}
 
+	int touchActive = moveOn && (moveDefX > 0.06f || moveDefX < -0.06f ||
+	                             moveDefY > 0.06f || moveDefY < -0.06f);
+
 	if (inPlayMode)
 	{
 		int cx = screenBits.bounds.right / 2;
@@ -171,6 +248,11 @@ void ShimPumpEvents (void)
 		{
 			shimInput.virtualMouse.h = (short)(cx + (int)(px * DEFLECT_HALF));
 			shimInput.virtualMouse.v = (short)(cy + (int)(py * DEFLECT_HALF));
+		}
+		else if (touchActive)
+		{
+			shimInput.virtualMouse.h = (short)(cx + (int)(moveDefX * DEFLECT_HALF));
+			shimInput.virtualMouse.v = (short)(cy + (int)(moveDefY * DEFLECT_HALF));
 		}
 		else if (keyAxisX > 0.02f || keyAxisX < -0.02f || keyAxisY > 0.02f || keyAxisY < -0.02f)
 		{
@@ -195,6 +277,11 @@ void ShimPumpEvents (void)
 		if (SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 8192) shimInput.brakeDown = 1;
 		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_WEST)) shimInput.bashDown = 1;
 		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_START)) shimInput.padStart = 1;
+	}
+	for (int i = 0; i < tfN; i++)                 /* right-half touch buttons */
+	{
+		if (tfKind[i] == 1) shimInput.buttonDown = 1;
+		if (tfKind[i] == 2) shimInput.brakeDown = 1;
 	}
 
 	ShimAdvanceTicks();

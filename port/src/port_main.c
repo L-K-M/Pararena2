@@ -90,6 +90,10 @@ int main (int argc, char **argv)
 		SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
 	}
 
+	/* the shim handles touch directly (virtual joystick + on-screen buttons);
+	 * stop SDL from also turning touches into mouse events, which would fight it */
+	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS))
 	{
 		/* try again without audio (containers, CI) */

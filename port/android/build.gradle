@@ -1,0 +1,24 @@
+// Top-level build file. Based on the SDL3 android-project template (the version
+// that ships in the SDL source this port fetches), so it tracks a known-good
+// Android Gradle Plugin / SDL combination.
+
+buildscript {
+    repositories {
+        mavenCentral()
+        google()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.7.3'
+    }
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+        google()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

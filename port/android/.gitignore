@@ -1,0 +1,15 @@
+# Fetched SDL source (see fetch-deps.sh)
+/app/jni/SDL/
+
+# Staged asset pack (copied from ../assets by fetch-deps.sh / stageAssetPack)
+/app/src/main/assets/
+
+# Gradle / Android build outputs
+/.gradle/
+/build/
+/app/build/
+/app/.cxx/
+/captures/
+local.properties
+*.iml
+.idea/

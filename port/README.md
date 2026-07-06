@@ -30,6 +30,17 @@ The asset pack (`assets/pararena2.dat`) is committed; it can be
 regenerated any time from the original `Pararena.project.r` /
 `Para Sounds.bin` with `python3 tools/build_assets.py`.
 
+### Android
+
+An Android app target lives in `android/` (SDL's `SDLActivity` loading the game
+as `libmain.so`, touch controls, asset pack bundled in the APK). It needs a JDK
+and the Android SDK/NDK; see `android/README.md`. In short:
+
+```sh
+cd port/android
+./fetch-deps.sh && ./gradlew assembleDebug
+```
+
 ## Four-player modes
 
 The MODE row in the menu selects, besides the classic 1v1:

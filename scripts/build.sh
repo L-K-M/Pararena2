@@ -28,12 +28,13 @@
 #       macOS    native universal (.app) — macOS host only
 #       Linux    native on a Linux host, else in a Docker container if docker exists
 #       Windows  cross-compiled with the MinGW-w64 toolchain when it is installed
+#       Android  Gradle assembleDebug .apk when a JDK + Android SDK/NDK are present
 #
-#     CI (release.yml) still builds all three on native runners; --dist is the
-#     local equivalent for whatever this machine can reach.
+#     CI (release.yml) still builds every target on runners; --dist is the local
+#     equivalent for whatever this machine can reach.
 #
 # Usage: scripts/build.sh [--clean] [--debug] [--run] [-- <args for the binary>]
-#        scripts/build.sh --dist [--targets mac,linux,windows] [--check] [--clean]
+#        scripts/build.sh --dist [--targets mac,linux,windows,android] [--check] [--clean]
 # Shared engine: https://github.com/L-K-M/release-tool (this stub only sets config).
 set -euo pipefail
 
@@ -95,7 +96,8 @@ selected() {
       mac|macos|osx|darwin) [[ "$1" == mac ]]     && return 0 ;;
       linux)                [[ "$1" == linux ]]   && return 0 ;;
       win|windows)          [[ "$1" == windows ]] && return 0 ;;
-      *) die "unknown target '$t' in --targets (use mac, linux, windows)" ;;
+      android|droid)        [[ "$1" == android ]] && return 0 ;;
+      *) die "unknown target '$t' in --targets (use mac, linux, windows, android)" ;;
     esac
   done
   return 1
@@ -256,6 +258,18 @@ build_windows_mingw() (
   rm -rf "$s"
 )
 
+build_android() (
+  set -e
+  have java || die "java (JDK 17+) not found"
+  [ -n "${ANDROID_HOME:-}${ANDROID_SDK_ROOT:-}" ] || die "set ANDROID_HOME (or ANDROID_SDK_ROOT) to your Android SDK"
+  bash port/android/fetch-deps.sh >&2
+  ( cd port/android && ./gradlew assembleDebug --no-daemon ) >&2
+  local apk="port/android/app/build/outputs/apk/debug/app-debug.apk"
+  [ -f "$apk" ] || die "APK not produced at $apk"
+  mkdir -p "$DIST_DIR"
+  cp "$apk" "$DIST_DIR/pararena2-$VERSION-android-arm64.apk"
+)
+
 # --- Orchestration + reporting -----------------------------------------------------
 report=()
 add() { report+=("$1|$2|$3"); }       # add <target> <status> <detail>
@@ -311,6 +325,18 @@ if selected windows; then
   else
     add Windows skipped "MinGW-w64 not found — brew install mingw-w64 (macOS) / apt install mingw-w64 (Linux)"
     echo "==> Windows: [skipped — MinGW-w64 not found]"
+  fi
+fi
+
+# Android --------------------------------------------------------------------------
+if selected android; then
+  art="$DIST_DIR/pararena2-$VERSION-android-arm64.apk"
+  if have java && [ -n "${ANDROID_HOME:-}${ANDROID_SDK_ROOT:-}" ]; then
+    if $DIST_CHECK; then echo "==> Android: Gradle assembleDebug   [would build]"; add Android plan "gradle → debug .apk (arm64)"
+    else run_target "Android" "$art" build_android; fi
+  else
+    add Android skipped "need a JDK and ANDROID_HOME/ANDROID_SDK_ROOT (SDK + NDK 28.2.13676358)"
+    echo "==> Android: [skipped — no JDK / Android SDK]"
   fi
 fi
 

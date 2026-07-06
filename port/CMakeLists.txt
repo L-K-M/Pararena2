@@ -4,15 +4,19 @@ project(pararena2 C)
 set(CMAKE_C_STANDARD 99)
 
 # ---------------------------------------------------------------- SDL3
-find_package(SDL3 CONFIG QUIET)
-if(NOT SDL3_FOUND)
-    message(STATUS "SDL3 not found - fetching and building it")
-    include(FetchContent)
-    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-    set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(SDL3
-        URL https://www.libsdl.org/release/SDL3-3.4.12.tar.gz)
-    FetchContent_MakeAvailable(SDL3)
+# The Android project supplies SDL3 by add_subdirectory'ing the SDL source
+# before this file, so only look it up / fetch it when no target exists yet.
+if(NOT TARGET SDL3::SDL3)
+    find_package(SDL3 CONFIG QUIET)
+    if(NOT SDL3_FOUND)
+        message(STATUS "SDL3 not found - fetching and building it")
+        include(FetchContent)
+        set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+        set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(SDL3
+            URL https://www.libsdl.org/release/SDL3-3.4.12.tar.gz)
+        FetchContent_MakeAvailable(SDL3)
+    endif()
 endif()
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -70,8 +74,8 @@ if(NOT EXISTS "${ASSET_PACK}")
     endif()
 endif()
 
-# ------------------------------------------------- executable
-add_executable(pararena2
+# ------------------------------------------------- executable / library
+set(PARARENA_SOURCES
     ${CONVERTED_SOURCES}
     shim/shim_qd.c
     shim/shim_text.c
@@ -88,6 +92,14 @@ add_executable(pararena2
     src/port_prefs.c
     src/port_stubs.c
 )
+
+if(ANDROID)
+    # SDLActivity loads libmain.so; build a shared library named "main".
+    add_library(pararena2 SHARED ${PARARENA_SOURCES})
+    set_target_properties(pararena2 PROPERTIES OUTPUT_NAME main)
+else()
+    add_executable(pararena2 ${PARARENA_SOURCES})
+endif()
 
 # Windows: compile the .rc so the .exe carries the app icon (Explorer/taskbar).
 # rc.exe (MSVC) and windres (MinGW) both find win/pararena.ico via the include dir.
@@ -127,7 +139,10 @@ endif()
 set_source_files_properties("${GAME_SRC_DIR}/Render.c" PROPERTIES
     COMPILE_OPTIONS "${RENDER_FLAGS}")
 
-# copy the asset pack next to the binary
-add_custom_command(TARGET pararena2 POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${ASSET_PACK}" "$<TARGET_FILE_DIR:pararena2>/pararena2.dat")
+# copy the asset pack next to the binary (desktop only; on Android the pack is
+# bundled into the APK's assets/ by Gradle instead)
+if(NOT ANDROID)
+    add_custom_command(TARGET pararena2 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ASSET_PACK}" "$<TARGET_FILE_DIR:pararena2>/pararena2.dat")
+endif()

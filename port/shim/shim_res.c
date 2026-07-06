@@ -6,6 +6,7 @@
  * swapping applied (the originals are big-endian int16 arrays).
  */
 
+#include <SDL3/SDL.h>
 #include "shim_internal.h"
 
 static uint8_t   *packBlob;
@@ -17,15 +18,17 @@ static int32_t  rd32s (const uint8_t *p) { return (int32_t)rd32(p); }
 
 int ShimLoadPack (const char *path)
 {
-	FILE *f = fopen(path, "rb");
-	if (!f)
+	/* SDL_IOFromFile, not fopen, so a relative name resolves inside the APK's
+	 * bundled assets/ on Android (and like a normal file everywhere else). */
+	SDL_IOStream *io = SDL_IOFromFile(path, "rb");
+	if (!io)
 		return 0;
-	fseek(f, 0, SEEK_END);
-	long sz = ftell(f);
-	fseek(f, 0, SEEK_SET);
+	Sint64 sz = SDL_GetIOSize(io);
+	if (sz <= 0) { SDL_CloseIO(io); return 0; }
 	packBlob = (uint8_t *)malloc((size_t)sz);
-	if (fread(packBlob, 1, (size_t)sz, f) != (size_t)sz) { fclose(f); return 0; }
-	fclose(f);
+	if (!packBlob) { SDL_CloseIO(io); return 0; }
+	if (SDL_ReadIO(io, packBlob, (size_t)sz) != (size_t)sz) { SDL_CloseIO(io); free(packBlob); packBlob = NULL; return 0; }
+	SDL_CloseIO(io);
 	if (memcmp(packBlob, "PAR2", 4) != 0)
 		return 0;
 	packCount = (int)rd32(packBlob + 8);

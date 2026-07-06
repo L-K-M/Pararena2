@@ -57,6 +57,9 @@ typedef struct ShimInput {
 	int     padConnected;
 	float   padX, padY;          /* -1..1 left stick */
 	int     splitInputs;         /* 4P: keep pads out of the merged kb/mouse state */
+	/* one-shot touch taps for menu navigation (set by the touch handler while
+	 * not in play mode, consumed + cleared by the port's HandleEvent) */
+	int     menuTapUp, menuTapDown, menuTapSelect;
 } ShimInput;
 extern ShimInput shimInput;
 

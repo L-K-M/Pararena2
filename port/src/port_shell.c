@@ -739,6 +739,11 @@ void HandleEvent (void)
 		prevU = u; prevD = d; prevL = l; prevR = r; prevS = s;
 	}
 
+	/* touchscreen menu navigation: tap top/bottom to move, middle to select */
+	if (shimInput.menuTapUp)     { menuMoveSel(-1); shimInput.menuTapUp = 0; }
+	if (shimInput.menuTapDown)   { menuMoveSel(1);  shimInput.menuTapDown = 0; }
+	if (shimInput.menuTapSelect) { menuActivate();  shimInput.menuTapSelect = 0; }
+
 	if (primaryMode == kPlayMode)
 	{
 		wasPlaying = 1;

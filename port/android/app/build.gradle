@@ -1,0 +1,63 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    // Code/resource package stays org.libsdl.app (matches SDL's Java glue and R
+    // references); the on-device identity is set via applicationId below.
+    namespace = "org.libsdl.app"
+    compileSdk 35
+    // The NDK SDL 3.4.12's own template targets. CI installs it; change it here
+    // if your machine has a different NDK.
+    ndkVersion = "28.2.13676358"
+
+    defaultConfig {
+        applicationId "com.softdorothy.pararena2"
+        minSdkVersion 21
+        targetSdkVersion 35
+        versionCode 1
+        versionName "1.0"
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_PLATFORM=android-21", "-DANDROID_STL=c++_static"
+                // arm64 only by default; add 'armeabi-v7a','x86','x86_64' to widen.
+                abiFilters 'arm64-v8a'
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // SDL's Java classes (org.libsdl.app.*) live in the SDL source fetched by
+    // fetch-deps.sh — compile them straight from there instead of vendoring.
+    sourceSets.main.java.srcDirs += ['jni/SDL/android-project/app/src/main/java']
+
+    externalNativeBuild {
+        cmake {
+            path 'jni/CMakeLists.txt'
+        }
+    }
+
+    // The native build must run before assets are merged (SDL template ordering).
+    applicationVariants.all { variant ->
+        tasks["merge${variant.name.capitalize()}Assets"]
+            .dependsOn("externalNativeBuild${variant.name.capitalize()}")
+    }
+
+    lint {
+        abortOnError = false
+    }
+}
+
+// Stage the committed asset pack into the APK's assets/ before packaging, so the
+// port's loader (SDL_IOFromFile "pararena2.dat") finds it inside the APK.
+tasks.register('stageAssetPack', Copy) {
+    from "${rootDir}/../assets/pararena2.dat"
+    into "${projectDir}/src/main/assets"
+}
+tasks.named('preBuild') { dependsOn 'stageAssetPack' }
