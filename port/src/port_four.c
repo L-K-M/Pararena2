@@ -27,6 +27,7 @@
 #include "SoundUtils.h"
 #include "MainWindow.h"
 #include "InitGameStructs.h"
+#include "DissBits.h"       /* DissolveWorkToMain (splash-to-arena reveal) */
 
 /* shim_input.c */
 int  ShimPadRead (int idx, float *x, float *y, int *btn, int *brake, int *bash);
