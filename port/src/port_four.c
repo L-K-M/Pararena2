@@ -1187,24 +1187,89 @@ static void paint4SouthGoalCircles (void)
 	}
 }
 
-/* marker rect above the ball holder (empty when nobody holds the ball) */
-static int ballMarkerRect (Rect *out)
+static int humanSeat (int seat)
 {
-	if (ballOwner < 0 || ent[ballOwner]->mode != kInArena)
+	return ent[seat]->persona == kHumanPlayer;
+}
+
+/* Head overlay above a character: a "P#" plate for human seats and a caret for
+ * whoever holds the ball. Returns 0 (empty) when the seat shows neither. When a
+ * human holds the ball the caret sits above the plate, otherwise right on the
+ * head. `out` receives the union bounding box. */
+static int headOverlayRect (int seat, Rect *out)
+{
+	if (ent[seat]->mode != kInArena)
 		return 0;
-	playerType *h = ent[ballOwner];
-	short cx  = (short)((h->isRect.left + h->isRect.right) / 2);
-	short top = (short)(h->isRect.top - 13);
-	SetRect(out, (short)(cx - 8), (short)(top - 1), (short)(cx + 9), (short)(top + 10));
+	int human = humanSeat(seat);
+	int holds = (ballOwner == seat);
+	if (!human && !holds)
+		return 0;
+	short cx  = (short)((ent[seat]->isRect.left + ent[seat]->isRect.right) / 2);
+	short top = ent[seat]->isRect.top;
+	SetRect(out, cx, (short)(top - 2), cx, (short)(top - 2));
+	if (human)
+	{
+		Rect r; SetRect(&r, (short)(cx - 10), (short)(top - 13), (short)(cx + 10), (short)(top - 2));
+		UnionRect(out, &r, out);
+	}
+	if (holds)
+	{
+		short ct = human ? (short)(top - 25) : (short)(top - 13);
+		Rect r; SetRect(&r, (short)(cx - 8), ct, (short)(cx + 9), (short)(ct + 10));
+		UnionRect(out, &r, out);
+	}
 	return 1;
+}
+
+static void drawHeadOverlay (int seat, const BitMap *work)
+{
+	short cx  = (short)((ent[seat]->isRect.left + ent[seat]->isRect.right) / 2);
+	short top = ent[seat]->isRect.top;
+	int human = humanSeat(seat);
+	int holds = (ballOwner == seat);
+
+	if (holds)
+	{
+		short ct = human ? (short)(top - 25) : (short)(top - 13);
+		drawDownTri(work, cx, (short)(ct + 1), 15, 9, 0 /* white outline */);
+		drawDownTri(work, cx, (short)(ct + 2), 11, 7, seatColor[seat]);
+	}
+	if (human)
+	{
+		/* a small "P#" plate: black fill, seat-colored border and text */
+		short l = (short)(cx - 10), r = (short)(cx + 9);
+		short t = (short)(top - 13), b = (short)(top - 3);
+		for (short y = t; y <= b; y++)
+			for (short x = l; x <= r; x++)
+				plotPix(work, 15 /* black */, x, y);
+		for (short x = l; x <= r; x++) { plotPix(work, seatColor[seat], x, t); plotPix(work, seatColor[seat], x, b); }
+		for (short y = t; y <= b; y++) { plotPix(work, seatColor[seat], l, y); plotPix(work, seatColor[seat], r, y); }
+		{
+			GrafPtr wasPort;
+			RGBColor c;
+			Str255 ps;
+			ps[0] = 2; ps[1] = 'P'; ps[2] = (unsigned char)('1' + seat);
+			GetPort(&wasPort);
+			SetPort((GrafPtr)offCWorkPtr);
+			Index2Color(seatColor[seat], &c);
+			RGBForeColor(&c);
+			MoveTo((short)(cx - 8), (short)(top - 5));
+			DrawString(ps);
+			Index2Color(15, &c);
+			RGBForeColor(&c);           /* leave a black pen for the verbatim code */
+			SetPort(wasPort);
+		}
+	}
 }
 
 static void render4Scene (void)
 {
-	static Rect markerWas = { 0, 0, 0, 0 };
-	static int  markerWasOn = 0;
-	Rect markerIs = { 0, 0, 0, 0 };
-	int  markerOn = drawThisFrame && ballMarkerRect(&markerIs);
+	static Rect headWas[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
+	static int  headWasOn[4] = { 0, 0, 0, 0 };
+	Rect headIs[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
+	int  headOn[4];
+	for (int i = 0; i < 4; i++)
+		headOn[i] = drawThisFrame && headOverlayRect(i, &headIs[i]);
 	const BitMap *parts = &((GrafPtr)offCPartsPtr)->portBits;
 	const BitMap *work = &((GrafPtr)offCWorkPtr)->portBits;
 	const BitMap *back = &((GrafPtr)offCBackPtr)->portBits;
@@ -1253,14 +1318,10 @@ static void render4Scene (void)
 			              &ent[i]->maskRect, &ent[i]->isRect, seatRemap(i));
 	}
 
-	/* ball-holder marker: a seat-colored, white-outlined caret over the holder */
-	if (markerOn)
-	{
-		short mcx = (short)((markerIs.left + markerIs.right) / 2);
-		short mtop = (short)(markerIs.top + 1);
-		drawDownTri(work, mcx, mtop, 15, 9, 0 /* white outline */);
-		drawDownTri(work, mcx, (short)(mtop + 1), 11, 7, seatColor[ballOwner]);
-	}
+	/* head overlays (P# plates for humans, ball caret for the holder), on top */
+	for (int i = 0; i < 4; i++)
+		if (headOn[i])
+			drawHeadOverlay(i, work);
 
 	for (int i = 0; i < 4; i++)
 		if (ent[i]->mode != kInStasis && drawThisFrame)
@@ -1277,14 +1338,16 @@ static void render4Scene (void)
 	if (showBoardCursor && !disableBoardCursor && drawThisFrame)
 		CopyBits(work, screen, &wholeCursor, &wholeCursor, srcCopy, kNilPointer);
 
-	/* publish the marker (and erase its previous position) on top of everything */
-	if (drawThisFrame && (markerOn || markerWasOn))
-	{
-		Rect wm = markerOn ? markerIs : markerWas;
-		if (markerOn && markerWasOn)
-			UnionRect(&markerIs, &markerWas, &wm);
-		CopyBits(work, screen, &wm, &wm, srcCopy, kNilPointer);
-	}
+	/* publish each head overlay (and erase its previous position) on top */
+	if (drawThisFrame)
+		for (int i = 0; i < 4; i++)
+			if (headOn[i] || headWasOn[i])
+			{
+				Rect wm = headOn[i] ? headIs[i] : headWas[i];
+				if (headOn[i] && headWasOn[i])
+					UnionRect(&headIs[i], &headWas[i], &wm);
+				CopyBits(work, screen, &wm, &wm, srcCopy, kNilPointer);
+			}
 
 	if (theDoor.stateChanged)
 	{
@@ -1304,14 +1367,16 @@ static void render4Scene (void)
 		CopyBits(back, work, &theBall.isRect, &theBall.isRect, srcCopy, kNilPointer);
 	if (showBoardCursor && !disableBoardCursor && drawThisFrame)
 		CopyBits(back, work, &boardCursor.isRect, &boardCursor.isRect, srcCopy, kNilPointer);
-	if (markerOn)
-		CopyBits(back, work, &markerIs, &markerIs, srcCopy, kNilPointer);
+	for (int i = 0; i < 4; i++)
+		if (headOn[i])
+			CopyBits(back, work, &headIs[i], &headIs[i], srcCopy, kNilPointer);
 
 	if (drawThisFrame)
-	{
-		markerWas = markerIs;
-		markerWasOn = markerOn;
-	}
+		for (int i = 0; i < 4; i++)
+		{
+			headWas[i] = headIs[i];
+			headWasOn[i] = headOn[i];
+		}
 }
 
 /* ---------------------------------------------------------------- ball loop */
