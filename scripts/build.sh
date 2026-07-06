@@ -115,12 +115,17 @@ HOST=$(uname -s)
 DIST_DIR="dist"
 BUILD_ROOT="port/build-dist"
 SMOKE=(--headless --cpu-demo --frames 900 --fast 8)
-SDL_STATIC=(-DSDL_SHARED=OFF -DSDL_STATIC=ON)
+# Force the self-contained SDL3: ignore any system/Homebrew SDL3 (a shared,
+# host-arch-only dylib that breaks both static linking and the universal build)
+# so the CMakeLists FetchContent fallback builds SDL3 from source, statically.
+# A normal dev build (scripts/build.sh with no --dist) deliberately keeps using
+# the fast system SDL3 — this override is dist-only.
+SDL_BUNDLED=(-DCMAKE_DISABLE_FIND_PACKAGE_SDL3=ON -DSDL_SHARED=OFF -DSDL_STATIC=ON)
 
 # --- Shared build/stage helpers ----------------------------------------------------
 cmake_build() {                       # cmake_build <build-dir> [extra -D flags…]
   local bdir="$1"; shift
-  cmake -S port -B "$bdir" -DCMAKE_BUILD_TYPE=Release "${SDL_STATIC[@]}" "$@"
+  cmake -S port -B "$bdir" -DCMAKE_BUILD_TYPE=Release "${SDL_BUNDLED[@]}" "$@"
   cmake --build "$bdir" --config Release -j
 }
 
@@ -198,7 +203,8 @@ export DEBIAN_FRONTEND=noninteractive
     libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
     libwayland-dev libdecor-0-dev libdrm-dev libgbm-dev \
     libgl1-mesa-dev libegl1-mesa-dev libdbus-1-dev libudev-dev libibus-1.0-dev
-  cmake -S /src/port -B /bd -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=OFF -DSDL_STATIC=ON
+  cmake -S /src/port -B /bd -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_DISABLE_FIND_PACKAGE_SDL3=ON -DSDL_SHARED=OFF -DSDL_STATIC=ON
   cmake --build /bd -j
   /bd/pararena2 --headless --cpu-demo --frames 900 --fast 8
   mkdir -p /stage/pararena2
