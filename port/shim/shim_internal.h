@@ -55,8 +55,12 @@ typedef struct ShimInput {
 	int     quitRequested;
 	int     padConnected;
 	float   padX, padY;          /* -1..1 left stick */
+	int     splitInputs;         /* 4P: keep pads out of the merged kb/mouse state */
 } ShimInput;
 extern ShimInput shimInput;
+
+/* per-pad access for multi-seat play (idx 0..3 = connect order) */
+int ShimPadRead (int idx, float *x, float *y, int *btn, int *brake, int *bash);
 
 /* ---------------- sound ---------------- */
 void ShimSoundInit (void);

@@ -82,6 +82,7 @@ add_executable(pararena2
     src/port_main.c
     src/port_init.c
     src/port_shell.c
+    src/port_four.c
     src/port_video.c
     src/port_univ.c
     src/port_prefs.c
