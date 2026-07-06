@@ -155,10 +155,14 @@ build_mac() (
   lipo -info "$bin" | grep -q arm64  || die "binary is not universal (arm64 missing)"
   lipo -info "$bin" | grep -q x86_64 || die "binary is not universal (x86_64 missing)"
   "$bin" "${SMOKE[@]}"
-  # Assemble a proper .app: static universal binary in MacOS/, asset pack in
-  # Resources/ (what SDL_GetBasePath() returns for a bundle), version-stamped
-  # Info.plist, ad-hoc signature (identity "-") so a universal app can launch.
-  local s app; s=$(stage_root); app="$s/pararena2/Pararena2.app"
+  # Assemble a proper, standalone .app right in dist/ (not a temp dir) so it is
+  # left behind as a double-clickable app: static universal binary in MacOS/,
+  # asset pack in Resources/ (what SDL_GetBasePath() returns for a bundle),
+  # version-stamped Info.plist, ad-hoc signature (identity "-") so a universal
+  # app can launch on Apple Silicon.
+  mkdir -p "$DIST_DIR"
+  local app="$DIST_DIR/Pararena2.app"
+  rm -rf "$app"
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
   cp "$bin" "$app/Contents/MacOS/pararena2"
   cp "$dat" "$app/Contents/Resources/pararena2.dat"
@@ -166,9 +170,15 @@ build_mac() (
   plutil -lint "$app/Contents/Info.plist" >/dev/null
   codesign --force --sign - "$app"
   codesign --verify --strict "$app"
-  mkdir -p "$DIST_DIR"
+  # Distributable tarball (pararena2/Pararena2.app + docs), same layout as CI.
+  # ditto copies the bundle preserving its signature; tar it, drop the temp dir.
+  local s; s=$(stage_root)
+  ditto "$app" "$s/pararena2/Pararena2.app"
   tar -czf "$DIST_DIR/pararena2-$VERSION-macos-universal.tar.gz" -C "$s" pararena2
   rm -rf "$s"
+  echo "    macOS: app  → $app"
+  # Reveal (and select) the app in Finder, like the default lkm-build path does.
+  open -R "$app" >/dev/null 2>&1 || true
 )
 
 build_linux_native() (
@@ -268,7 +278,7 @@ fi
 if selected mac; then
   art="$DIST_DIR/pararena2-$VERSION-macos-universal.tar.gz"
   if [[ "$HOST" == "Darwin" ]]; then
-    if $DIST_CHECK; then echo "==> macOS:   native universal .app  [would build]"; add macOS plan "native universal .app + tar.gz"
+    if $DIST_CHECK; then echo "==> macOS:   native universal .app  [would build]"; add macOS plan "standalone .app (revealed) + tar.gz"
     else run_target "macOS" "$art" build_mac; fi
   else
     add macOS skipped "a universal .app can only be built on a macOS host"
@@ -318,11 +328,15 @@ if $DIST_CHECK; then
 fi
 
 echo "artifacts in $DIST_DIR/ (version $VERSION):"
+found_any=false
+# the standalone, double-clickable macOS app (version-independent name)
+[[ -d "$DIST_DIR/Pararena2.app" ]] && { echo "  $DIST_DIR/Pararena2.app"; found_any=true; }
+# the distributable archives
 if ls "$DIST_DIR"/pararena2-"$VERSION"-* >/dev/null 2>&1; then
   for f in "$DIST_DIR"/pararena2-"$VERSION"-*; do echo "  $f"; done
-else
-  echo "  (none)"
+  found_any=true
 fi
+$found_any || echo "  (none)"
 
 # Non-zero exit only when a target we actually attempted failed to build.
 rc=0
