@@ -166,6 +166,7 @@ build_mac() (
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
   cp "$bin" "$app/Contents/MacOS/pararena2"
   cp "$dat" "$app/Contents/Resources/pararena2.dat"
+  cp port/assets/icon/pararena.icns "$app/Contents/Resources/pararena.icns"
   sed "s/__VERSION__/$PLIST_VERSION/g" port/macos/Info.plist > "$app/Contents/Info.plist"
   plutil -lint "$app/Contents/Info.plist" >/dev/null
   codesign --force --sign - "$app"

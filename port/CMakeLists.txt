@@ -89,8 +89,16 @@ add_executable(pararena2
     src/port_stubs.c
 )
 
+# Windows: compile the .rc so the .exe carries the app icon (Explorer/taskbar).
+# rc.exe (MSVC) and windres (MinGW) both find win/pararena.ico via the include dir.
+if(WIN32)
+    enable_language(RC)
+    target_sources(pararena2 PRIVATE win/pararena.rc)
+endif()
+
 target_include_directories(pararena2 PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/shim"
+    "${CMAKE_CURRENT_SOURCE_DIR}/win"
     "${GAME_SRC_DIR}")
 
 target_link_libraries(pararena2 PRIVATE SDL3::SDL3)

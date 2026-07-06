@@ -1,0 +1,4 @@
+/* Windows resource script: give pararena2.exe its application icon.
+ * The lowest-numbered ICON resource is what Explorer and the taskbar use.
+ * Compiled by rc.exe (MSVC) or windres (MinGW) and linked into the .exe. */
+1 ICON "pararena.ico"

@@ -5,6 +5,7 @@
 
 #include <SDL3/SDL.h>
 #include "shim_internal.h"
+#include "app_icon.h"
 
 static SDL_Window   *win;
 static SDL_Renderer *ren;
@@ -22,6 +23,18 @@ int PortVideoOpen (int w, int h, int startFullscreen)
 	{
 		ShimLog("SDL_CreateWindow failed: %s", SDL_GetError());
 		return 0;
+	}
+	/* the classic Pararena arena+ball icon: shown in the title bar / taskbar
+	 * (Linux, Windows) and the dock while running (macOS uses the .app icon).
+	 * SDL_SetWindowIcon copies the surface, so we free it right after. */
+	{
+		SDL_Surface *icon = SDL_CreateSurfaceFrom(APP_ICON_W, APP_ICON_H,
+		                    SDL_PIXELFORMAT_RGBA32, (void *)appIconRGBA, APP_ICON_W * 4);
+		if (icon)
+		{
+			SDL_SetWindowIcon(win, icon);
+			SDL_DestroySurface(icon);
+		}
 	}
 	ren = SDL_CreateRenderer(win, NULL);
 	if (!ren)

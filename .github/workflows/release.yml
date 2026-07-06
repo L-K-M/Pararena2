@@ -110,6 +110,7 @@ jobs:
             mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
             cp "$BIN" "$APP/Contents/MacOS/pararena2"
             cp "$DAT" "$APP/Contents/Resources/pararena2.dat"
+            cp port/assets/icon/pararena.icns "$APP/Contents/Resources/pararena.icns"
             sed "s/__VERSION__/${VERSION#v}/g" port/macos/Info.plist > "$APP/Contents/Info.plist"
             plutil -lint "$APP/Contents/Info.plist"
             codesign --force --sign - "$APP"

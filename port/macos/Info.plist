@@ -19,6 +19,8 @@
 	<string>com.softdorothy.pararena2</string>
 	<key>CFBundleExecutable</key>
 	<string>pararena2</string>
+	<key>CFBundleIconFile</key>
+	<string>pararena.icns</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleInfoDictionaryVersion</key>
