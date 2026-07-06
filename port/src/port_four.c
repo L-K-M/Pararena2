@@ -1531,7 +1531,7 @@ static void check4AbortiveInput (void)
 		GetPort(&wasPort);
 		SetPort((GrafPtr)mainWndo);
 		draw4Text((short)(screenWide / 2 - (short)(strlen(l2) * 4)),
-		          (short)(screenHigh / 2 + 178), l2, 1);
+		          (short)(screenHigh / 2 + 178), l2, 15);   /* black on the white card */
 		Index2Color(15, &blackC);
 		RGBForeColor(&blackC);
 		SetPort(wasPort);
