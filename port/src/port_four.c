@@ -266,7 +266,10 @@ static void syncLegacyBallState (void)
 		if (ballOwner < 0)
 		{
 			whosGotBall = (theBall.mode == kBallRolling) ? kBallRollsFreely : kBallIsNotHere;
-			if (lastToucher >= 0)
+			/* only stamp last-held once the ball is actually in play — writing it
+			 * during the kBallFiring launch window clobbers ResetBall's ~2s
+			 * countdown (which lives in theBall.modifier), re-firing in a few frames */
+			if (lastToucher >= 0 && theBall.mode == kBallRolling)
 				theBall.modifier = TEAM_OF(lastToucher) == 0 ? kPlayerLastHeld : kOpponentLastHeld;
 		}
 		else if (TEAM_OF(ballOwner) == 0)
@@ -636,9 +639,27 @@ static void ai4Decide (int seat)
 	short savedWho = whosGotBall;
 	short savedMod = theBall.modifier;
 	char savedBallMode = theBall.mode;
+	short savedSel = ent[seat]->selector;
 
 	thePlayer = *ent[target];
 	theOpponent = *ent[seat];
+	/* the acting AI seat is always presented as "the opponent" and its target as
+	 * "the player" — the roles the 1992 persona code keys off via ->selector to
+	 * read possession. Seats set up with kPlayerSelector (0 and 2) would
+	 * otherwise misread whosGotBall and either freeze while holding the ball
+	 * (never scoring) or repeatedly re-part a ball they don't own. The real
+	 * selector is restored on the decided copy below so nothing persists. */
+	theOpponent.selector = kOpponentSelector;
+	thePlayer.selector = kPlayerSelector;
+	/* FFA-2 goals rotate owners, so aim the AI at whichever goal it owns right
+	 * now (non-owner seats keep their default side; a fuller fix would have them
+	 * defend rather than carry to a goal that scores for someone else). */
+	if (fourMode == FOUR_FFA2)
+	{
+		for (int g = 0; g < 2; g++)
+			if (goalOwner[g] == seat)
+				theOpponent.whichGoal = (g == 0) ? kLeftGoal : kRightGoal;
+	}
 	if (ballOwner == seat)
 	{
 		whosGotBall = kOpponentHasBall;
@@ -658,6 +679,7 @@ static void ai4Decide (int seat)
 	OpponentDecides(&theOpponent);      /* verbatim persona */
 
 	playerType decided = theOpponent;
+	decided.selector = savedSel;            /* don't persist the forced pair-view role */
 	char ballModeAfter = theBall.mode;
 
 	thePlayer = savedP;
@@ -897,6 +919,9 @@ static void reset4Ball (void)
 		ent[i]->loopsBallHeld = 0;
 	}
 	ballOwner = -1;
+	lastToucher = -1;                    /* nobody has touched the new ball yet —
+	                                     * avoids a spurious foul against the prior
+	                                     * toucher if the reset ball rolls out */
 	syncLegacyBallState();
 }
 
@@ -920,6 +945,8 @@ static void ball4InGoal (void)
 	{
 		/* a scored-on goal rotates immediately */
 		goalOwner[g] = (goalOwner[g] + 1) & 3;
+		if (goalOwner[0] == goalOwner[1])   /* never let one seat own both goals */
+			goalOwner[g] = (goalOwner[g] + 1) & 3;
 		paintGoalBand(g, seatColor[goalOwner[g]]);
 	}
 	reset4Ball();
