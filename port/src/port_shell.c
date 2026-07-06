@@ -15,6 +15,7 @@
 #include "PlayUtils.h"
 #include "SoundUtils.h"
 #include "Render.h"
+#include "controller_img.h"   /* embedded 1-bit dithered gamepad art */
 
 void PortInputSetPlayMode (int playing);
 void PortFourRun (int mode, const int personas[4]);   /* port_four.c */
@@ -210,20 +211,14 @@ static void drawText (short x, short y, const char *s, unsigned char colorIdx)
 #define IDX_BLACK 15
 #define IDX_GRAY 13
 
-/* ---- 8bpp pixel helpers (screen coords) for the drawn System-7-style pad ---- */
+/* ---- 8bpp pixel helpers (screen coords): the gamepad-bitmap blit and the
+ *      little button glyphs in the controls-card legend ---- */
 static void pxPlot (const BitMap *bm, unsigned char idx, int x, int y)
 {
 	if (x < bm->bounds.left || x >= bm->bounds.right ||
 	    y < bm->bounds.top  || y >= bm->bounds.bottom) return;
 	*((uint8_t *)bm->baseAddr + (long)(y - bm->bounds.top) * bm->rowBytes
 	  + (x - bm->bounds.left)) = idx;
-}
-
-static void pxFillRect (const BitMap *bm, unsigned char idx, int l, int t, int r, int b)
-{
-	for (int y = t; y <= b; y++)
-		for (int x = l; x <= r; x++)
-			pxPlot(bm, idx, x, y);
 }
 
 static void pxFillCircle (const BitMap *bm, unsigned char idx, int cx, int cy, int rad)
@@ -234,40 +229,11 @@ static void pxFillCircle (const BitMap *bm, unsigned char idx, int cx, int cy, i
 				pxPlot(bm, idx, cx + dx, cy + dy);
 }
 
-/* 50% checkerboard "gray" inside a circle — QuickDraw's dithered gray: plot fg
- * on every other pixel, leaving the pixels between it (so it reads as a tone
- * over whatever is underneath). The classic System-7 way to shade a recess. */
-static void pxDitherCircle (const BitMap *bm, unsigned char fg, int cx, int cy, int rad)
-{
-	for (int dy = -rad; dy <= rad; dy++)
-		for (int dx = -rad; dx <= rad; dx++)
-			if (dx * dx + dy * dy <= rad * rad && (((cx + dx) + (cy + dy)) & 1) == 0)
-				pxPlot(bm, fg, cx + dx, cy + dy);
-}
-
 /* filled circle with a 1px border */
 static void pxDisc (const BitMap *bm, int cx, int cy, int rad, unsigned char fill, unsigned char border)
 {
 	pxFillCircle(bm, border, cx, cy, rad);
 	pxFillCircle(bm, fill, cx, cy, rad - 1);
-}
-
-static void pxFillRound (const BitMap *bm, unsigned char idx, int l, int t, int r, int b, int rad)
-{
-	pxFillRect(bm, idx, l + rad, t, r - rad, b);
-	pxFillRect(bm, idx, l, t + rad, r, b - rad);
-	pxFillCircle(bm, idx, l + rad, t + rad, rad);
-	pxFillCircle(bm, idx, r - rad, t + rad, rad);
-	pxFillCircle(bm, idx, l + rad, b - rad, rad);
-	pxFillCircle(bm, idx, r - rad, b - rad, rad);
-}
-
-/* rounded-rect outline: a black frame one pixel proud of a white inset, i.e. a
- * 1px black border around a white fill — the System-7 button/nub look. */
-static void pxFrameRound (const BitMap *bm, int l, int t, int r, int b, int rad)
-{
-	pxFillRound(bm, IDX_BLACK, l, t, r, b, rad);
-	pxFillRound(bm, IDX_WHITE, l + 1, t + 1, r - 1, b - 1, rad);
 }
 
 /* one glyph centered at (cx,cy) in colour fg, via the shim font (mainWndo port) */
@@ -282,59 +248,18 @@ static void pxChar (int cx, int cy, char ch, unsigned char fg)
 	DrawString(ps);
 }
 
-/* A controller drawn as classic Mac System-7 line-art: a black 1px outline
- * around a white body, recesses shaded with QuickDraw's 50% dithered "gray",
- * everything else black-on-white. Body centered at (gx,gy). The face buttons
- * lose their console colours (System 7 was 1-bit black & white) and are shown
- * as outlined circles with their letter; the legend maps each to its action. */
-static void drawController (const BitMap *scr, int gx, int gy)
+/* Blit the user-supplied dithered controller bitmap (controller_img.h) at its
+ * top-left (left,top), pixel-for-pixel — no scaling. The art is 1-bit on a
+ * white ground, so we paint only the black pixels and let the white System-7
+ * panel show through the rest, reproducing the image exactly. */
+static void drawController (const BitMap *scr, int left, int top)
 {
-	int i;
-
-	/* body silhouette: a slab plus two grips flaring down, drawn as a black
-	 * union then filled white 1px inside so only the outer edge stays black. */
-	pxFillRound(scr, IDX_BLACK, gx - 106, gy - 32, gx + 106, gy + 32, 20);
-	pxFillCircle(scr, IDX_BLACK, gx - 82, gy + 30, 42);
-	pxFillCircle(scr, IDX_BLACK, gx + 82, gy + 30, 42);
-	pxFillRound(scr, IDX_WHITE, gx - 105, gy - 31, gx + 105, gy + 31, 20);
-	pxFillCircle(scr, IDX_WHITE, gx - 82, gy + 30, 41);
-	pxFillCircle(scr, IDX_WHITE, gx + 82, gy + 30, 41);
-
-	/* shoulder bumpers on the top edge — outlined white nubs tucked under the
-	 * body edge, so only their black outline shows above it. */
-	pxFrameRound(scr, gx - 90, gy - 40, gx - 58, gy - 30, 4);   /* LB */
-	pxFrameRound(scr, gx + 58, gy - 40, gx + 90, gy - 30, 4);   /* RB */
-
-	/* guide + view/menu row across the top-centre */
-	pxDisc(scr, gx,      gy - 20, 6, IDX_WHITE, IDX_BLACK);
-	pxFillCircle(scr, IDX_BLACK, gx, gy - 20, 2);
-	pxDisc(scr, gx - 16, gy - 16, 3, IDX_WHITE, IDX_BLACK);
-	pxDisc(scr, gx + 16, gy - 16, 3, IDX_WHITE, IDX_BLACK);
-
-	/* left stick (upper-left): outlined well, dithered recess, white cap */
-	pxDisc(scr, gx - 58, gy - 6, 16, IDX_WHITE, IDX_BLACK);
-	pxDitherCircle(scr, IDX_BLACK, gx - 58, gy - 6, 14);
-	pxDisc(scr, gx - 58, gy - 6, 8, IDX_WHITE, IDX_BLACK);
-
-	/* d-pad (lower-left): an outlined white plus (black plus, white inset) */
-	pxFillRect(scr, IDX_BLACK, gx - 72, gy + 18, gx - 44, gy + 28);
-	pxFillRect(scr, IDX_BLACK, gx - 63, gy + 9,  gx - 53, gy + 37);
-	pxFillRect(scr, IDX_WHITE, gx - 71, gy + 19, gx - 45, gy + 27);
-	pxFillRect(scr, IDX_WHITE, gx - 62, gy + 10, gx - 54, gy + 36);
-
-	/* right stick (lower-centre) */
-	pxDisc(scr, gx + 22, gy + 20, 15, IDX_WHITE, IDX_BLACK);
-	pxDitherCircle(scr, IDX_BLACK, gx + 22, gy + 20, 13);
-	pxDisc(scr, gx + 22, gy + 20, 7, IDX_WHITE, IDX_BLACK);
-
-	/* face buttons (diamond): Y top, X left, B right, A bottom — outlined
-	 * circles with a black letter, System-7 monochrome. */
-	static const struct { int dx, dy; char ch; } faces[4] = {
-		{  64, -16, 'Y' }, {  48,  0, 'X' }, {  80,  0, 'B' }, {  64, 16, 'A' } };
-	for (i = 0; i < 4; i++)
+	for (int y = 0; y < CONTROLLER_IMG_H; y++)
 	{
-		pxDisc(scr, gx + faces[i].dx, gy + faces[i].dy, 9, IDX_WHITE, IDX_BLACK);
-		pxChar(gx + faces[i].dx, gy + faces[i].dy, faces[i].ch, IDX_BLACK);
+		const unsigned char *row = controllerImgBits + (long)y * CONTROLLER_IMG_ROWBYTES;
+		for (int x = 0; x < CONTROLLER_IMG_W; x++)
+			if (row[x >> 3] & (0x80 >> (x & 7)))
+				pxPlot(scr, IDX_BLACK, left + x, top + y);
 	}
 }
 
@@ -346,13 +271,15 @@ void DrawControlsCard (const char *title)
 	RGBColor c;
 	const BitMap *scr = &(((GrafPtr)mainWndo)->portBits);
 	Rect panel;
-	int gx, gy, lx, ly;
+	int imgLeft, imgTop, lx, ly;
 
 	GetPort(&wasPort);
 	SetPort((GrafPtr)mainWndo);
 
-	SetRect(&panel, (short)(screenWide / 2 - 290), (short)(screenHigh / 2 - 200),
-	                (short)(screenWide / 2 + 290), (short)(screenHigh / 2 + 200));
+	/* the panel is tall enough to hold the full-size gamepad bitmap (drawn 1:1,
+	 * never scaled) plus a title above and the legend below. */
+	SetRect(&panel, (short)(screenWide / 2 - 290), (short)(screenHigh / 2 - 226),
+	                (short)(screenWide / 2 + 290), (short)(screenHigh / 2 + 226));
 	/* a plain white System-7 dialog: white fill, black double frame */
 	PmForeColor(IDX_WHITE);
 	PaintRect(&panel);
@@ -361,15 +288,16 @@ void DrawControlsCard (const char *title)
 	Rect inner = panel; InsetRect(&inner, 2, 2); FrameRect(&inner);
 
 	drawText((short)(screenWide / 2 - (short)(strlen(title) * 4)),
-	         (short)(panel.top + 26), title, IDX_BLACK);
+	         (short)(panel.top + 22), title, IDX_BLACK);
 
-	gx = screenWide / 2;
-	gy = panel.top + 118;
-	drawController(scr, gx, gy);
+	/* the gamepad bitmap, blitted pixel-for-pixel and centred horizontally */
+	imgLeft = screenWide / 2 - CONTROLLER_IMG_W / 2;
+	imgTop  = panel.top + 28;
+	drawController(scr, imgLeft, imgTop);
 
 	/* legend: a button glyph (or its name), then the action — all black-on-white */
 	lx = panel.left + 70;
-	ly = panel.top + 210;
+	ly = imgTop + CONTROLLER_IMG_H + 16;
 	#define ROW 22
 	pxDisc(scr, lx, ly - 4, 8, IDX_WHITE, IDX_BLACK); pxChar(lx, ly - 4, 'A', IDX_BLACK);
 	drawText((short)(lx + 156), (short)(ly), "CATCH / THROW / CROUCH", IDX_BLACK);
@@ -386,10 +314,10 @@ void DrawControlsCard (const char *title)
 
 	drawText((short)(lx - 6), (short)(ly + 4 * ROW), "START", IDX_BLACK);
 	drawText((short)(lx + 156), (short)(ly + 4 * ROW), "PAUSE  (also Esc)", IDX_BLACK);
-	#undef ROW
 
-	drawText((short)(panel.left + 24), (short)(panel.bottom - 34),
+	drawText((short)(panel.left + 24), (short)(ly + 5 * ROW + 4),
 	         "KEYBOARD:  MOUSE=SKATE  X=CATCH  SPACE=BRAKE  B/N/M=BASH", IDX_BLACK);
+	#undef ROW
 
 	Index2Color(IDX_BLACK, &c); RGBForeColor(&c);
 	SetPort(wasPort);
