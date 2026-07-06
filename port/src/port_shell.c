@@ -281,10 +281,11 @@ static void drawController (const BitMap *scr, int gx, int gy)
 	/* a darker inset for a little depth */
 	pxFillRound(scr, IDX_DGRAY, gx - 96, gy - 22, gx + 96, gy + 20, 14);
 
-	/* shoulder bumpers + a called-out right trigger (brake) */
-	pxFillRound(scr, IDX_GRAY, gx - 96, gy - 40, gx - 52, gy - 30, 4);
-	pxFillRound(scr, IDX_GRAY, gx + 52, gy - 40, gx + 96, gy - 30, 4);
-	pxFillRound(scr, IDX_GRAY, gx + 60, gy - 50, gx + 90, gy - 42, 3);   /* RT */
+	/* shoulder bumpers (LB/RB) + triggers (LT/RT), symmetric, on the top edge */
+	pxFillRound(scr, IDX_GRAY,  gx - 92, gy - 50, gx - 62, gy - 42, 3);   /* LT */
+	pxFillRound(scr, IDX_GRAY,  gx + 62, gy - 50, gx + 92, gy - 42, 3);   /* RT */
+	pxFillRound(scr, IDX_DGRAY, gx - 98, gy - 41, gx - 56, gy - 30, 4);   /* LB */
+	pxFillRound(scr, IDX_DGRAY, gx + 56, gy - 41, gx + 98, gy - 30, 4);   /* RB */
 
 	/* left stick (top-left) */
 	pxDisc(scr, gx - 62, gy - 6, 15, IDX_DGRAY, IDX_BLACK);
@@ -305,10 +306,10 @@ static void drawController (const BitMap *scr, int gx, int gy)
 	pxDisc(scr, gx + 12, gy - 8, 4, IDX_GRAY, IDX_BLACK);
 
 	/* face buttons (diamond): Y top, X left, B right, A bottom */
-	pxDisc(scr, gx + 64, gy - 20, 9, IDX_YELLOW, IDX_BLACK); pxChar(gx + 64, gy - 20, 'Y', IDX_BLACK);
-	pxDisc(scr, gx + 48, gy - 5,  9, IDX_BLUE,   IDX_BLACK); pxChar(gx + 48, gy - 5,  'X', IDX_WHITE);
-	pxDisc(scr, gx + 80, gy - 5,  9, IDX_RED,    IDX_BLACK); pxChar(gx + 80, gy - 5,  'B', IDX_WHITE);
-	pxDisc(scr, gx + 64, gy + 10, 9, IDX_GREEN,  IDX_BLACK); pxChar(gx + 64, gy + 10, 'A', IDX_BLACK);
+	pxDisc(scr, gx + 64, gy - 17, 9, IDX_YELLOW, IDX_BLACK); pxChar(gx + 64, gy - 17, 'Y', IDX_BLACK);
+	pxDisc(scr, gx + 48, gy - 2,  9, IDX_BLUE,   IDX_BLACK); pxChar(gx + 48, gy - 2,  'X', IDX_WHITE);
+	pxDisc(scr, gx + 80, gy - 2,  9, IDX_RED,    IDX_BLACK); pxChar(gx + 80, gy - 2,  'B', IDX_WHITE);
+	pxDisc(scr, gx + 64, gy + 13, 9, IDX_GREEN,  IDX_BLACK); pxChar(gx + 64, gy + 13, 'A', IDX_BLACK);
 }
 
 /* Draw the controls card (panel + controller + legend) onto mainWndo. Leaves the

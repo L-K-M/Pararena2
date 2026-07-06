@@ -46,8 +46,11 @@ The MODE row in the menu selects, besides the classic 1v1:
   provides the southern pair). Score into *your* goal; defend it from the
   other three. First to 7 wins.
 
-Player 1 plays with the keyboard/mouse; the P2-P4 seats can be humans on
-gamepads (assigned in connect order) or any of the six AI personas.
+Player 1 plays with the keyboard/mouse **or the first gamepad**; the P2-P4
+seats can be humans on the remaining gamepads (assigned in connect order:
+P2 = 2nd pad, P3 = 3rd, P4 = 4th) or any of the six AI personas. Pause with
+Esc or the pad's Start button; the pause screen shows a controls legend and
+lets you resume or end the game (End = E / the pad's Back button).
 Instant replay is disabled in four-player games for now.
 
 `--four-demo N` (1=2v2, 2=FFA-2, 3=FFA-4) watches an all-AI four-player

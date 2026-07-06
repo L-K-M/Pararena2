@@ -277,6 +277,15 @@ Boolean Button (void)
 	return (Boolean)shimInput.buttonDown;
 }
 
+/* is <button> (an SDL_GamepadButton) down on any connected pad? */
+int ShimAnyPadButton (int button)
+{
+	for (int i = 0; i < 4; i++)
+		if (padList[i] && SDL_GetGamepadButton(padList[i], (SDL_GamepadButton)button))
+			return 1;
+	return 0;
+}
+
 void GetMouse (Point *mouseLoc)
 {
 	ShimPumpEvents();

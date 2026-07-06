@@ -43,6 +43,7 @@ int  PortVideoIsFullscreen (void);
 /* ---------------- timing / events ---------------- */
 void ShimPumpEvents (void);      /* poll SDL, update Ticks/keymap/mouse; may sleep ~0.5ms */
 void ShimAdvanceTicks (void);    /* recompute Ticks from wall clock */
+int  ShimAnyPadButton (int button);  /* is an SDL_GamepadButton down on any connected pad? */
 
 /* ---------------- input state (written by pump, read by shims) ---------------- */
 typedef struct ShimInput {

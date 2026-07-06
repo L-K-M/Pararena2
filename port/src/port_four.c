@@ -529,6 +529,23 @@ static void apply4HumanForces (int seat)
 		                 ks[SDL_SCANCODE_X]);
 		brake = ks[SDL_SCANCODE_SPACE];
 		bash = ks[SDL_SCANCODE_B] || ks[SDL_SCANCODE_N] || ks[SDL_SCANCODE_M];
+		/* P1 may also use the first gamepad: its stick overrides the mouse while
+		 * deflected, and its buttons fold in alongside the keyboard/mouse ones */
+		{
+			float px = 0, py = 0;
+			int pb = 0, pbk = 0, pbs = 0;
+			if (ShimPadRead(0, &px, &py, &pb, &pbk, &pbs))
+			{
+				if (px != 0 || py != 0)
+				{
+					who->hMouse = (short)((int)(px * deflectHalf) / kPlayerInputSensitive);
+					who->vMouse = (short)((int)(-py * deflectHalf) / kPlayerInputSensitive);
+				}
+				btn = (Boolean)(btn || pb);
+				brake = brake || pbk;
+				bash = bash || pbs;
+			}
+		}
 	}
 	else
 	{
@@ -1461,10 +1478,11 @@ static void seat4Setup (int mode, const int personas[4])
 			p->initXPos = i < 2 ? initX[i] : initXFFA[i];
 			p->initZPos = i < 2 ? initZFFA[i] : initZFFAo[i];
 		}
-		/* seat 0 human drives keyboard/mouse; later human seats get pads */
+		/* P1 drives keyboard/mouse AND the first pad (slot 0); later human seats
+		 * take the remaining pads 1,2,3 (seatSlot n reads pad n-1) */
 		seatSlot[i] = -1;
 		if (personas[i] == kHumanPlayer)
-			seatSlot[i] = (i == 0) ? 0 : nextPad++;
+			seatSlot[i] = (i == 0) ? 0 : (1 + nextPad++);
 		seatBank[i] = TEAM_OF(i);
 		aiTarget[i] = -1;
 		score4[i] = 0;
@@ -1476,6 +1494,8 @@ static void seat4Setup (int mode, const int personas[4])
 
 static void check4AbortiveInput (void)
 {
+	static int pausePrev = 0;
+	int pauseNow;
 	GetKeys(theKeyMap);
 	if (BitTst(&theKeyMap, kCommandKeyMap))
 	{
@@ -1493,16 +1513,20 @@ static void check4AbortiveInput (void)
 	}
 	if (BitTst(&theKeyMap, kSKeyMap))
 		DoSoundToggle();                     /* verbatim */
-	if (BitTst(&theKeyMap, kTabKeyMap))
+
+	/* Pause on a fresh Esc/Start press only (edge-triggered) — otherwise the
+	 * same press that resumes would immediately re-pause. */
+	pauseNow = BitTst(&theKeyMap, kTabKeyMap) ? 1 : 0;
+	if (pauseNow && !pausePrev)
 	{
-		/* inline pause screen (Esc or Tab): resume on a fresh Esc/Tab, or end the
-		 * game with E. Wait for the pause key to be released first so the same
-		 * press can't immediately resume. */
+		/* pause screen: resume on a fresh Esc/Start; end with E (keyboard) or
+		 * the pad's Back/View button. Wait for the pause key to be released
+		 * first so the entry press can't immediately resume or end. */
 		long pausedAt = Ticks;
 		int armed = 0;
 		GrafPtr wasPort;
 		RGBColor blackC;
-		const char *l2 = "ESC = RESUME     E = END GAME";
+		const char *l2 = "ESC / START = RESUME     E / BACK = END GAME";
 		DrawControlsCard("PAUSED");
 		GetPort(&wasPort);
 		SetPort((GrafPtr)mainWndo);
@@ -1521,7 +1545,8 @@ static void check4AbortiveInput (void)
 				fourWinner = -1;
 				break;
 			}
-			if (armed && BitTst(&theKeyMap, kEKeyMap))   /* end the game */
+			if (armed && (BitTst(&theKeyMap, kEKeyMap) ||
+			              ShimAnyPadButton(SDL_GAMEPAD_BUTTON_BACK)))   /* end game */
 			{
 				fourDone = 1;
 				fourWinner = -1;
@@ -1540,6 +1565,7 @@ static void check4AbortiveInput (void)
 		if (fourMode == FOUR_FFA4)
 			paint4SouthGoalCircles();
 	}
+	pausePrev = pauseNow;
 }
 
 static void endFourGame (int winnerSeat)
