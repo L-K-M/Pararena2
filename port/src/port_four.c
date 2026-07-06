@@ -1183,6 +1183,17 @@ static void drawDownTri (const BitMap *dst, int cx, int top, int w, int h, unsig
 	}
 }
 
+/* The two corner scoreboards (InitDigiDispData's 13-inch dest rects, plus their
+ * PICT frames) sit in the lower corners where the mirrored south goal circles
+ * land. The score counter must stay on top of the goal, so skip goal-circle
+ * pixels that fall inside either scoreboard frame. */
+static int inCornerScoreboard (int x, int y)
+{
+	if (y < 419 || y > 469)
+		return 0;
+	return (x >= 17 && x <= 98) || (x >= 542 && x <= 623);
+}
+
 /* The arena PICT only carries the two NORTHERN goal-circle marks; mirror them to
  * the FFA-4 southern goals (reflection about the arena z-axis, SOUTH_MIRROR). */
 static void paint4SouthGoalCircles (void)
@@ -1195,7 +1206,7 @@ static void paint4SouthGoalCircles (void)
 	{
 		for (int y = 86; y <= 122; y++)
 			for (int x = cx[i] - 16; x <= cx[i] + 16; x++)
-				if (peekBack(x, y) == GOAL_CIRCLE_IDX)
+				if (peekBack(x, y) == GOAL_CIRCLE_IDX && !inCornerScoreboard(x, SOUTH_MIRROR - y))
 					plotPix(back, GOAL_CIRCLE_IDX, x, SOUTH_MIRROR - y);
 		Rect box;
 		box.left = (short)(cx[i] - 16);          box.right  = (short)(cx[i] + 17);
