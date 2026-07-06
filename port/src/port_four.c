@@ -34,6 +34,7 @@ int  ShimPadRead (int idx, float *x, float *y, int *btn, int *brake, int *bash);
 void PortInputSetPlayMode (int playing);
 /* port_shell.c */
 void DoOpeningAnnouncer (void);
+void DrawControlsCard (const char *title);   /* pause-screen controls card */
 
 /* ---------------------------------------------------------------- state */
 
@@ -1501,12 +1502,12 @@ static void check4AbortiveInput (void)
 		int armed = 0;
 		GrafPtr wasPort;
 		RGBColor blackC;
-		const char *l1 = "PAUSED";
 		const char *l2 = "ESC = RESUME     E = END GAME";
+		DrawControlsCard("PAUSED");
 		GetPort(&wasPort);
 		SetPort((GrafPtr)mainWndo);
-		draw4Text((short)(screenWide / 2 - (short)(strlen(l1) * 4)), 40, l1, 1);
-		draw4Text((short)(screenWide / 2 - (short)(strlen(l2) * 4)), 58, l2, 1);
+		draw4Text((short)(screenWide / 2 - (short)(strlen(l2) * 4)),
+		          (short)(screenHigh / 2 + 178), l2, 1);
 		Index2Color(15, &blackC);
 		RGBForeColor(&blackC);
 		SetPort(wasPort);

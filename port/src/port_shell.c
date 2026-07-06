@@ -28,7 +28,7 @@ int portFourDemo = 0;         /* --four-demo N: auto-run one 4P AI game */
  * plus an options page. */
 enum { PAGE_MAIN, PAGE_OPTIONS };
 enum { MI_START, MI_MODE, MI_GAME, MI_OPPONENT, MI_LEAGUE, MI_SIDE,
-       MI_P2, MI_P3, MI_P4, MI_OPTIONS, MI_QUIT, MI_ITEMS };
+       MI_P2, MI_P3, MI_P4, MI_OPTIONS, MI_CONTROLS, MI_QUIT, MI_ITEMS };
 enum { OI_VOLUME, OI_SOUND, OI_CURSOR, OI_ANNOUNCER, OI_RGOALS, OI_RFOULS, OI_RKEY,
        OI_FULLSCREEN, OI_BACK, OI_COUNT };
 static int menuPage = PAGE_MAIN;
@@ -74,6 +74,7 @@ static void buildMenuItems (void)
 		visItems[n++] = MI_LEAGUE;
 	}
 	visItems[n++] = MI_OPTIONS;
+	visItems[n++] = MI_CONTROLS;
 	visItems[n++] = MI_QUIT;
 	visCount = n;
 	if (menuSel >= visCount)
@@ -208,6 +209,213 @@ static void drawText (short x, short y, const char *s, unsigned char colorIdx)
 #define IDX_YELLOW 1
 #define IDX_BLACK 15
 #define IDX_GRAY 13
+/* extra Apple-palette indices for the controls card */
+#define IDX_RED 3
+#define IDX_BLUE 6
+#define IDX_GREEN 8
+#define IDX_LGRAY 12
+#define IDX_DGRAY 14
+
+/* ---- 8bpp pixel helpers (screen coords) for the drawn Xbox-style pad ---- */
+static void pxPlot (const BitMap *bm, unsigned char idx, int x, int y)
+{
+	if (x < bm->bounds.left || x >= bm->bounds.right ||
+	    y < bm->bounds.top  || y >= bm->bounds.bottom) return;
+	*((uint8_t *)bm->baseAddr + (long)(y - bm->bounds.top) * bm->rowBytes
+	  + (x - bm->bounds.left)) = idx;
+}
+
+static void pxFillRect (const BitMap *bm, unsigned char idx, int l, int t, int r, int b)
+{
+	for (int y = t; y <= b; y++)
+		for (int x = l; x <= r; x++)
+			pxPlot(bm, idx, x, y);
+}
+
+static void pxFillCircle (const BitMap *bm, unsigned char idx, int cx, int cy, int rad)
+{
+	for (int dy = -rad; dy <= rad; dy++)
+		for (int dx = -rad; dx <= rad; dx++)
+			if (dx * dx + dy * dy <= rad * rad)
+				pxPlot(bm, idx, cx + dx, cy + dy);
+}
+
+/* filled circle with a 1px border */
+static void pxDisc (const BitMap *bm, int cx, int cy, int rad, unsigned char fill, unsigned char border)
+{
+	pxFillCircle(bm, border, cx, cy, rad);
+	pxFillCircle(bm, fill, cx, cy, rad - 1);
+}
+
+static void pxFillRound (const BitMap *bm, unsigned char idx, int l, int t, int r, int b, int rad)
+{
+	pxFillRect(bm, idx, l + rad, t, r - rad, b);
+	pxFillRect(bm, idx, l, t + rad, r, b - rad);
+	pxFillCircle(bm, idx, l + rad, t + rad, rad);
+	pxFillCircle(bm, idx, r - rad, t + rad, rad);
+	pxFillCircle(bm, idx, l + rad, b - rad, rad);
+	pxFillCircle(bm, idx, r - rad, b - rad, rad);
+}
+
+/* one glyph centered at (cx,cy) in colour fg, via the shim font (mainWndo port) */
+static void pxChar (int cx, int cy, char ch, unsigned char fg)
+{
+	RGBColor c;
+	Str255 ps;
+	ps[0] = 1; ps[1] = (unsigned char)ch;
+	Index2Color(fg, &c);
+	RGBForeColor(&c);
+	MoveTo((short)(cx - 4), (short)(cy + 3));
+	DrawString(ps);
+}
+
+/* Stylized Xbox-style controller, body centered at (gx,gy). Face buttons keep
+ * their conventional colours; the ones the game uses are called out in the
+ * legend drawn by DrawControlsCard. */
+static void drawController (const BitMap *scr, int gx, int gy)
+{
+	/* body silhouette: central slab + two grips, light grey on black */
+	pxFillRound(scr, IDX_LGRAY, gx - 104, gy - 30, gx + 104, gy + 30, 18);
+	pxFillCircle(scr, IDX_LGRAY, gx - 80, gy + 26, 40);
+	pxFillCircle(scr, IDX_LGRAY, gx + 80, gy + 26, 40);
+	/* a darker inset for a little depth */
+	pxFillRound(scr, IDX_DGRAY, gx - 96, gy - 22, gx + 96, gy + 20, 14);
+
+	/* shoulder bumpers + a called-out right trigger (brake) */
+	pxFillRound(scr, IDX_GRAY, gx - 96, gy - 40, gx - 52, gy - 30, 4);
+	pxFillRound(scr, IDX_GRAY, gx + 52, gy - 40, gx + 96, gy - 30, 4);
+	pxFillRound(scr, IDX_GRAY, gx + 60, gy - 50, gx + 90, gy - 42, 3);   /* RT */
+
+	/* left stick (top-left) */
+	pxDisc(scr, gx - 62, gy - 6, 15, IDX_DGRAY, IDX_BLACK);
+	pxDisc(scr, gx - 62, gy - 6, 8, IDX_GRAY, IDX_BLACK);
+
+	/* d-pad (bottom-left) */
+	pxFillRect(scr, IDX_BLACK, gx - 72, gy + 18, gx - 44, gy + 26);
+	pxFillRect(scr, IDX_BLACK, gx - 62, gy + 8, gx - 54, gy + 36);
+	pxFillRect(scr, IDX_DGRAY, gx - 71, gy + 19, gx - 45, gy + 25);
+	pxFillRect(scr, IDX_DGRAY, gx - 61, gy + 9, gx - 55, gy + 35);
+
+	/* right stick (bottom-centre) */
+	pxDisc(scr, gx + 20, gy + 22, 15, IDX_DGRAY, IDX_BLACK);
+	pxDisc(scr, gx + 20, gy + 22, 8, IDX_GRAY, IDX_BLACK);
+
+	/* view / menu buttons */
+	pxDisc(scr, gx - 12, gy - 8, 4, IDX_GRAY, IDX_BLACK);
+	pxDisc(scr, gx + 12, gy - 8, 4, IDX_GRAY, IDX_BLACK);
+
+	/* face buttons (diamond): Y top, X left, B right, A bottom */
+	pxDisc(scr, gx + 64, gy - 20, 9, IDX_YELLOW, IDX_BLACK); pxChar(gx + 64, gy - 20, 'Y', IDX_BLACK);
+	pxDisc(scr, gx + 48, gy - 5,  9, IDX_BLUE,   IDX_BLACK); pxChar(gx + 48, gy - 5,  'X', IDX_WHITE);
+	pxDisc(scr, gx + 80, gy - 5,  9, IDX_RED,    IDX_BLACK); pxChar(gx + 80, gy - 5,  'B', IDX_WHITE);
+	pxDisc(scr, gx + 64, gy + 10, 9, IDX_GREEN,  IDX_BLACK); pxChar(gx + 64, gy + 10, 'A', IDX_BLACK);
+}
+
+/* Draw the controls card (panel + controller + legend) onto mainWndo. Leaves the
+ * bottom ~20px for a caller-supplied prompt. Shared by the menu and the pause. */
+void DrawControlsCard (const char *title)
+{
+	GrafPtr wasPort;
+	RGBColor c;
+	const BitMap *scr = &(((GrafPtr)mainWndo)->portBits);
+	Rect panel;
+	int gx, gy, lx, ly;
+
+	GetPort(&wasPort);
+	SetPort((GrafPtr)mainWndo);
+
+	SetRect(&panel, (short)(screenWide / 2 - 290), (short)(screenHigh / 2 - 200),
+	                (short)(screenWide / 2 + 290), (short)(screenHigh / 2 + 200));
+	PmForeColor(IDX_BLACK);
+	PaintRect(&panel);
+	Index2Color(IDX_WHITE, &c); RGBForeColor(&c);
+	FrameRect(&panel);
+	Rect inner = panel; InsetRect(&inner, 2, 2); FrameRect(&inner);
+
+	drawText((short)(screenWide / 2 - (short)(strlen(title) * 4)),
+	         (short)(panel.top + 26), title, IDX_YELLOW);
+
+	gx = screenWide / 2;
+	gy = panel.top + 118;
+	drawController(scr, gx, gy);
+
+	/* legend: a colour dot / glyph, the button, then the action */
+	lx = panel.left + 70;
+	ly = panel.top + 210;
+	#define ROW 22
+	pxDisc(scr, lx, ly - 4, 6, IDX_GREEN, IDX_BLACK);
+	drawText((short)(lx + 18), (short)(ly), "A", IDX_WHITE);
+	drawText((short)(lx + 156), (short)(ly), "CATCH / THROW / CROUCH", IDX_WHITE);
+
+	pxDisc(scr, lx, ly + ROW - 4, 6, IDX_BLUE, IDX_BLACK);
+	drawText((short)(lx + 18), (short)(ly + ROW), "X", IDX_WHITE);
+	drawText((short)(lx + 156), (short)(ly + ROW), "BASH  (dash / tackle)", IDX_WHITE);
+
+	pxDisc(scr, lx, ly + 2 * ROW - 4, 6, IDX_RED, IDX_BLACK);
+	drawText((short)(lx + 18), (short)(ly + 2 * ROW), "B  or  RT", IDX_WHITE);
+	drawText((short)(lx + 156), (short)(ly + 2 * ROW), "BRAKE", IDX_WHITE);
+
+	pxDisc(scr, lx, ly + 3 * ROW - 4, 6, IDX_LGRAY, IDX_BLACK);
+	drawText((short)(lx + 18), (short)(ly + 3 * ROW), "STICK / D-PAD", IDX_WHITE);
+	drawText((short)(lx + 156), (short)(ly + 3 * ROW), "SKATE  (thrust)", IDX_WHITE);
+
+	pxDisc(scr, lx, ly + 4 * ROW - 4, 6, IDX_GRAY, IDX_BLACK);
+	drawText((short)(lx + 18), (short)(ly + 4 * ROW), "START", IDX_WHITE);
+	drawText((short)(lx + 156), (short)(ly + 4 * ROW), "PAUSE  (also Esc)", IDX_WHITE);
+	#undef ROW
+
+	drawText((short)(panel.left + 24), (short)(panel.bottom - 34),
+	         "KEYBOARD:  MOUSE=SKATE  X=CATCH  SPACE=BRAKE  B/N/M=BASH", IDX_GRAY);
+
+	Index2Color(IDX_BLACK, &c); RGBForeColor(&c);
+	SetPort(wasPort);
+	shimScreenDirty = 1;
+}
+
+int ShimPadRead (int idx, float *x, float *y, int *btn, int *brake, int *bash);  /* shim_input.c */
+
+/* any keyboard/gamepad press that should dismiss the controls screen */
+static int controlsDismiss (void)
+{
+	const bool *ks = SDL_GetKeyboardState(NULL);
+	if (ks[SDL_SCANCODE_RETURN] || ks[SDL_SCANCODE_KP_ENTER] ||
+	    ks[SDL_SCANCODE_SPACE]  || ks[SDL_SCANCODE_ESCAPE]) return 1;
+	for (int i = 0; i < 4; i++)
+	{
+		float px, py; int b = 0, bk = 0, bs = 0;
+		if (ShimPadRead(i, &px, &py, &b, &bk, &bs) && (b || bk || bs)) return 1;
+	}
+	return 0;
+}
+
+/* modal controls screen opened from the main menu */
+static void ShowControlsScreen (void)
+{
+	GrafPtr wp;
+	RGBColor c;
+	int armed = 0;
+
+	DrawControlsCard("CONTROLS");
+	GetPort(&wp);
+	SetPort((GrafPtr)mainWndo);
+	drawText((short)(screenWide / 2 - 92), (short)(screenHigh / 2 + 178),
+	         "PRESS ANY KEY TO RETURN", IDX_GRAY);
+	Index2Color(IDX_BLACK, &c); RGBForeColor(&c);
+	SetPort(wp);
+	shimScreenDirty = 1;
+	ShimForcePresent();
+
+	if (shimHeadless) { menuDirty = 1; return; }
+	for (;;)
+	{
+		ShimPumpEvents();
+		if (shimInput.quitRequested) { quitting = TRUE; break; }
+		if (!controlsDismiss()) armed = 1;   /* wait for release, then any press */
+		else if (armed) break;
+		SDL_Delay(10);
+	}
+	menuDirty = 1;
+}
 
 static void menuValueText (int item, char *buf, size_t bufsz)
 {
@@ -256,6 +464,7 @@ static const char *menuItemLabel (int item)
 		case MI_P3: return selMode == 1 ? "TEAMMATE" : "PLAYER 3";
 		case MI_P4: return selMode == 1 ? "RIVAL 2" : "PLAYER 4";
 		case MI_OPTIONS: return "OPTIONS...";
+		case MI_CONTROLS: return "CONTROLS";
 		case MI_QUIT: return "QUIT";
 		default: return "";
 	}
@@ -454,6 +663,7 @@ static void menuActivate (void)
 		{
 			case MI_START: startGame(); break;
 			case MI_OPTIONS: menuPage = PAGE_OPTIONS; optSel = OI_VOLUME; menuDirty = 1; break;
+			case MI_CONTROLS: ShowControlsScreen(); break;
 			case MI_QUIT: quitting = TRUE; break;
 			default: menuAdjust(1); break;
 		}
