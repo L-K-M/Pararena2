@@ -56,6 +56,16 @@ Instant replay is disabled in four-player games for now.
 `--four-demo N` (1=2v2, 2=FFA-2, 3=FFA-4) watches an all-AI four-player
 game, like `--cpu-demo` does for 1v1.
 
+## HUD enhancements and Classic mode
+
+In every play mode — including the classic 1v1 game — each human player wears a
+small numbered plate ("P1"…"P4") above their skater, and whoever is holding the
+ball gets a caret marker above their head, so possession is always readable. If
+you'd rather have the untouched 1992 look, turn on **CLASSIC MODE** in the
+Options menu: it hides these overlays everywhere (and is the switch we'll gate
+any future gameplay tweaks behind, so the classic experience stays classic). The
+setting persists across launches.
+
 ## Controls
 
 | Action | Keyboard / mouse | Gamepad |

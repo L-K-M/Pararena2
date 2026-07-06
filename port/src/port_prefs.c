@@ -61,6 +61,58 @@ Boolean LoadPrefs (prefsInfo *thePrefs)
 	return ok;
 }
 
+/* ---- port-only settings (not part of the verbatim prefsInfo struct) ----
+ * A tiny separate file holds preferences the original game never had, so the
+ * verbatim prefs format stays byte-for-byte compatible. Currently just the
+ * "classic mode" switch that hides the port's HUD enhancements. */
+
+#define PORTSET_MAGIC "PAR2SET1"
+
+static char *portSettingsPath (void)
+{
+	static char path[1024];
+	if (!path[0])
+	{
+		char *base = SDL_GetPrefPath("softdorothy", "Pararena2");
+		if (!base)
+			return NULL;
+		snprintf(path, sizeof path, "%ssettings.bin", base);
+		SDL_free(base);
+	}
+	return path;
+}
+
+void PortSaveSettings (int classicMode)
+{
+	char *p = portSettingsPath();
+	if (!p)
+		return;
+	FILE *f = fopen(p, "wb");
+	if (!f)
+		return;
+	int32_t v = classicMode ? 1 : 0;
+	fwrite(PORTSET_MAGIC, 1, 8, f);
+	fwrite(&v, 4, 1, f);
+	fclose(f);
+}
+
+/* leaves *classicMode untouched (caller keeps its default) on any failure */
+void PortLoadSettings (int *classicMode)
+{
+	char *p = portSettingsPath();
+	if (!p)
+		return;
+	FILE *f = fopen(p, "rb");
+	if (!f)
+		return;
+	char magic[8];
+	int32_t v = 0;
+	if (fread(magic, 1, 8, f) == 8 && memcmp(magic, PORTSET_MAGIC, 8) == 0 &&
+	    fread(&v, 4, 1, f) == 1)
+		*classicMode = v ? 1 : 0;
+	fclose(f);
+}
+
 /* the Sys6/Sys7 plumbing declared in Prefs.h — unused by the port */
 Boolean CanUseFindFolder (void) { return FALSE; }
 Boolean GetPrefsFPathSyst7 (long *a, short *b) { (void)a; (void)b; return FALSE; }

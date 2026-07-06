@@ -25,13 +25,21 @@ extern short soundVolume;     /* declared in ConfigureSound.h (not included here
 int portCpuDemo = 0;          /* --cpu-demo: auto-start George vs Mara */
 int portFourDemo = 0;         /* --four-demo N: auto-run one 4P AI game */
 
+/* Classic mode: when on, the port's HUD enhancements (player-number plates and
+ * the ball-owner caret, in every play mode) are hidden for a pure-1992 look.
+ * Off by default; persisted in the port settings file. A future gate for any
+ * further gameplay tweaks we want kept out of the classic experience. */
+int classicMode = 0;
+void PortLoadSettings (int *classicMode);   /* port_prefs.c */
+void PortSaveSettings (int classicMode);
+
 /* menu model: a dynamic main page (items shown/hidden by the selected mode)
  * plus an options page. */
 enum { PAGE_MAIN, PAGE_OPTIONS };
 enum { MI_START, MI_MODE, MI_GAME, MI_OPPONENT, MI_LEAGUE, MI_SIDE,
        MI_P2, MI_P3, MI_P4, MI_OPTIONS, MI_CONTROLS, MI_QUIT, MI_ITEMS };
 enum { OI_VOLUME, OI_SOUND, OI_CURSOR, OI_ANNOUNCER, OI_RGOALS, OI_RFOULS, OI_RKEY,
-       OI_FULLSCREEN, OI_BACK, OI_COUNT };
+       OI_FULLSCREEN, OI_CLASSIC, OI_BACK, OI_COUNT };
 static int menuPage = PAGE_MAIN;
 static int menuSel = 0;        /* index into the visible-item list on the main page */
 static int optSel = OI_VOLUME;
@@ -95,6 +103,7 @@ void PortShellSyncFromPrefs (void)
 	if (isLeague >= kLittleLeague && isLeague <= kProfessional)
 		selLeague = isLeague;
 	selSide = leftGoalIsPlayers ? 0 : 1;
+	PortLoadSettings(&classicMode);
 }
 
 /* ------------------------------------------------------------------ */
@@ -397,6 +406,7 @@ static void optionValueText (int item, char *buf, size_t bufsz)
 		case OI_RFOULS: snprintf(buf, bufsz, "%s", replayFouls ? "ON" : "OFF"); break;
 		case OI_RKEY: snprintf(buf, bufsz, "%s", replayOnR ? "ON" : "OFF"); break;
 		case OI_FULLSCREEN: snprintf(buf, bufsz, "%s", PortVideoIsFullscreen() ? "ON" : "OFF"); break;
+		case OI_CLASSIC: snprintf(buf, bufsz, "%s", classicMode ? "ON" : "OFF"); break;
 		default: buf[0] = 0; break;
 	}
 }
@@ -448,7 +458,7 @@ static void drawMenu (void)
 
 	static const char *optLabels[OI_COUNT] = {
 		"VOLUME", "SOUND", "BOARD CURSOR", "ANNOUNCER", "REPLAY GOALS",
-		"REPLAY FOULS", "REPLAY KEY R", "FULLSCREEN", "BACK"
+		"REPLAY FOULS", "REPLAY KEY R", "FULLSCREEN", "CLASSIC MODE", "BACK"
 	};
 	char val[48];
 	if (menuPage == PAGE_MAIN)
@@ -599,6 +609,7 @@ static void menuAdjust (int dir)
 			case OI_RFOULS: replayFouls = !replayFouls; break;
 			case OI_RKEY: replayOnR = !replayOnR; break;
 			case OI_FULLSCREEN: PortVideoSetFullscreen(!PortVideoIsFullscreen()); break;
+			case OI_CLASSIC: classicMode = !classicMode; PortSaveSettings(classicMode); break;
 			default: break;
 		}
 		replaySomething = replayGoals || replayFouls || replayOnR;

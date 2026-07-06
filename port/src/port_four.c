@@ -35,6 +35,7 @@ void PortInputSetPlayMode (int playing);
 /* port_shell.c */
 void DoOpeningAnnouncer (void);
 void DrawControlsCard (const char *title);   /* pause-screen controls card */
+extern int classicMode;                      /* Options toggle: hide HUD enhancements */
 
 /* ---------------------------------------------------------------- state */
 
@@ -1224,13 +1225,16 @@ static int humanSeat (int seat)
 /* Head overlay above a character: a "P#" plate for human seats and a caret for
  * whoever holds the ball. Returns 0 (empty) when the seat shows neither. When a
  * human holds the ball the caret sits above the plate, otherwise right on the
- * head. `out` receives the union bounding box. */
-static int headOverlayRect (int seat, Rect *out)
+ * head. `out` receives the union bounding box. `holds` is passed in because the
+ * four-player compositor tracks possession via ballOwner while the verbatim 1v1
+ * path reads it from the person's posture. Suppressed entirely in classic mode. */
+static int headOverlayRect (int seat, int holds, Rect *out)
 {
+	if (classicMode)
+		return 0;
 	if (ent[seat]->mode != kInArena)
 		return 0;
 	int human = humanSeat(seat);
-	int holds = (ballOwner == seat);
 	if (!human && !holds)
 		return 0;
 	short cx  = (short)((ent[seat]->isRect.left + ent[seat]->isRect.right) / 2);
@@ -1250,12 +1254,11 @@ static int headOverlayRect (int seat, Rect *out)
 	return 1;
 }
 
-static void drawHeadOverlay (int seat, const BitMap *work)
+static void drawHeadOverlay (int seat, int holds, const BitMap *work)
 {
 	short cx  = (short)((ent[seat]->isRect.left + ent[seat]->isRect.right) / 2);
 	short top = ent[seat]->isRect.top;
 	int human = humanSeat(seat);
-	int holds = (ballOwner == seat);
 
 	if (holds)
 	{
@@ -1291,6 +1294,74 @@ static void drawHeadOverlay (int seat, const BitMap *work)
 	}
 }
 
+/* ------------------------------------------------------------------ 1v1 HUD */
+/* The single-player game renders through the verbatim RenderScene, which has no
+ * seam for the head overlays. So we run the same P#/caret pass here, hooked from
+ * HandlePostGraphics() (below) after the frame is composited: draw into the work
+ * map, blit to the screen, then plug the holes — exactly as render4Scene does.
+ * Possession comes from the ball (mode/modifier) since 1v1 has no ballOwner.
+ * Seats 0/1 are thePlayer/theOpponent (ent[0]/ent[1]). Idle in classic mode. */
+void PortSPHeadOverlays (void)
+{
+	static Rect hWas[2]   = { {0,0,0,0}, {0,0,0,0} };
+	static int  hWasOn[2] = { 0, 0 };
+	Rect hIs[2] = { {0,0,0,0}, {0,0,0,0} };
+	int  hOn[2], holds[2];
+
+	if (!drawThisFrame)
+		return;
+
+	/* 1v1 possession lives in the ball: mode kBallHeld + modifier says which
+	 * side holds it (kPlayerHolding = thePlayer/seat 0, kOpponentHolding = 1). */
+	int held = (theBall.mode == kBallHeld);
+	holds[0] = held && (theBall.modifier == kPlayerHolding);
+	holds[1] = held && (theBall.modifier == kOpponentHolding);
+	for (int s = 0; s < 2; s++)
+		hOn[s] = headOverlayRect(s, holds[s], &hIs[s]);
+	if (!hOn[0] && !hOn[1] && !hWasOn[0] && !hWasOn[1])
+		return;                                  /* nothing to draw or erase */
+
+	const BitMap *work   = &((GrafPtr)offCWorkPtr)->portBits;
+	const BitMap *back   = &((GrafPtr)offCBackPtr)->portBits;
+	const BitMap *screen = &(((GrafPtr)mainWndo)->portBits);
+
+	for (int s = 0; s < 2; s++)
+		if (hOn[s])
+			drawHeadOverlay(s, holds[s], work);
+
+	/* publish each overlay (and erase its previous footprint) */
+	for (int s = 0; s < 2; s++)
+		if (hOn[s] || hWasOn[s])
+		{
+			Rect wm = hOn[s] ? hIs[s] : hWas[s];
+			if (hOn[s] && hWasOn[s])
+				UnionRect(&hIs[s], &hWas[s], &wm);
+			CopyBits(work, screen, &wm, &wm, srcCopy, kNilPointer);
+		}
+
+	/* plug the holes back out of the work map */
+	for (int s = 0; s < 2; s++)
+		if (hOn[s])
+			CopyBits(back, work, &hIs[s], &hIs[s], srcCopy, kNilPointer);
+
+	for (int s = 0; s < 2; s++)
+	{
+		hWas[s]   = hIs[s];
+		hWasOn[s] = hOn[s];
+	}
+}
+
+/* Wrapper over the verbatim HandlePostGraphics (renamed to HandlePostGraphicsGame
+ * for Render.c only, via a -D on that one file). RunStandardGame calls this every
+ * frame right after RenderScene, giving the 1v1 HUD its per-frame hook without
+ * touching any Sources/ file. */
+void HandlePostGraphicsGame (void);
+void HandlePostGraphics (void)
+{
+	HandlePostGraphicsGame();
+	PortSPHeadOverlays();
+}
+
 static void render4Scene (void)
 {
 	static Rect headWas[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
@@ -1298,7 +1369,7 @@ static void render4Scene (void)
 	Rect headIs[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
 	int  headOn[4];
 	for (int i = 0; i < 4; i++)
-		headOn[i] = drawThisFrame && headOverlayRect(i, &headIs[i]);
+		headOn[i] = drawThisFrame && headOverlayRect(i, ballOwner == i, &headIs[i]);
 	const BitMap *parts = &((GrafPtr)offCPartsPtr)->portBits;
 	const BitMap *work = &((GrafPtr)offCWorkPtr)->portBits;
 	const BitMap *back = &((GrafPtr)offCBackPtr)->portBits;
@@ -1350,7 +1421,7 @@ static void render4Scene (void)
 	/* head overlays (P# plates for humans, ball caret for the holder), on top */
 	for (int i = 0; i < 4; i++)
 		if (headOn[i])
-			drawHeadOverlay(i, work);
+			drawHeadOverlay(i, ballOwner == i, work);
 
 	for (int i = 0; i < 4; i++)
 		if (ent[i]->mode != kInStasis && drawThisFrame)

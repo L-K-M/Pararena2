@@ -115,6 +115,18 @@ endif()
 set_source_files_properties(${CONVERTED_SOURCES} PROPERTIES
     COMPILE_OPTIONS "${GAME_FLAGS}")
 
+# Render.c only: rename its HandlePostGraphics definition so the port can wrap it
+# (port_four.c provides HandlePostGraphics, which calls this original then draws
+# the 1v1 HUD overlays). Callers live in other translation units, so they still
+# resolve to the port wrapper — no Sources/ file is edited.
+if(MSVC)
+    set(RENDER_FLAGS "${GAME_FLAGS};/DHandlePostGraphics=HandlePostGraphicsGame")
+else()
+    set(RENDER_FLAGS "${GAME_FLAGS};-DHandlePostGraphics=HandlePostGraphicsGame")
+endif()
+set_source_files_properties("${GAME_SRC_DIR}/Render.c" PROPERTIES
+    COMPILE_OPTIONS "${RENDER_FLAGS}")
+
 # copy the asset pack next to the binary
 add_custom_command(TARGET pararena2 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
