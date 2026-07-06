@@ -627,6 +627,14 @@ static int pickTarget (int seat)
 	return best < 0 ? (seat ^ 1) : best;
 }
 
+/* z-mirror of a facing octal (swap north<->south, keep east/west and rested);
+ * boardForceTable is exactly antisymmetric under this, so the FFA-4 field can be
+ * reflected in z to make the north-only persona AI drive a southern-goal seat. */
+static short zmirFacing (short d)
+{
+	return (d == kFacingRested) ? d : (short)((4 - d) & 7);
+}
+
 static void ai4Decide (int seat)
 {
 	int target = aiTarget[seat];
@@ -651,15 +659,30 @@ static void ai4Decide (int seat)
 	 * selector is restored on the decided copy below so nothing persists. */
 	theOpponent.selector = kOpponentSelector;
 	thePlayer.selector = kPlayerSelector;
-	/* FFA-2 goals rotate owners, so aim the AI at whichever goal it owns right
-	 * now (non-owner seats keep their default side; a fuller fix would have them
-	 * defend rather than carry to a goal that scores for someone else). */
-	if (fourMode == FOUR_FFA2)
+	/* Aim the AI at the goal it currently owns. FFA-2 goals rotate owners; FFA-4
+	 * goals are fixed but two of them are southern. whichGoal encodes only the
+	 * left/right side (non-owner FFA-2 seats keep their default side). */
+	int ownedGoal = -1, mirror = 0;
+	int nGoals = (fourMode == FOUR_FFA4) ? 4 : (fourMode == FOUR_FFA2) ? 2 : 0;
+	for (int g = 0; g < nGoals; g++)
+		if (goalOwner[g] == seat) { ownedGoal = g; break; }
+	if (ownedGoal >= 0)
+		theOpponent.whichGoal = (ownedGoal & 1) ? kRightGoal : kLeftGoal;
+
+	/* FFA-4 southern goals (g = 2 SW, 3 SE) live at z < 0, which the verbatim
+	 * goal-seek/shoot logic (all gated on z > 0) can't target. Present a world
+	 * reflected in z for the decision, then un-mirror the result below; the
+	 * FFA-4 field is z-symmetric so the north-only AI drives the seat south. */
+	mirror = (fourMode == FOUR_FFA4 && ownedGoal >= 2);
+	if (mirror)
 	{
-		for (int g = 0; g < 2; g++)
-			if (goalOwner[g] == seat)
-				theOpponent.whichGoal = (g == 0) ? kLeftGoal : kRightGoal;
+		theOpponent.zPos = -theOpponent.zPos; theOpponent.zVel = -theOpponent.zVel;
+		theOpponent.direction = zmirFacing(theOpponent.direction);
+		thePlayer.zPos = -thePlayer.zPos; thePlayer.zVel = -thePlayer.zVel;
+		thePlayer.direction = zmirFacing(thePlayer.direction);
+		theBall.zPos = -theBall.zPos; theBall.zVel = -theBall.zVel;
 	}
+
 	if (ballOwner == seat)
 	{
 		whosGotBall = kOpponentHasBall;
@@ -681,6 +704,18 @@ static void ai4Decide (int seat)
 	playerType decided = theOpponent;
 	decided.selector = savedSel;            /* don't persist the forced pair-view role */
 	char ballModeAfter = theBall.mode;
+
+	if (mirror)
+	{
+		/* un-mirror the decision back into real (southern) space, and the ball,
+		 * which the persona may have repositioned when it shot (DoPersonBallParted
+		 * wrote mirror-space values). Negating restores an untouched ball exactly. */
+		decided.zPos = -decided.zPos; decided.zVel = -decided.zVel;
+		decided.direction = zmirFacing(decided.direction);
+		theBall.zPos = -theBall.zPos; theBall.zVel = -theBall.zVel;
+		if (savedBallMode == kBallHeld && ballModeAfter == kBallRolling)
+			BallRectFromPosition();     /* recompute the rect at the real position */
+	}
 
 	thePlayer = savedP;
 	theOpponent = savedO;
