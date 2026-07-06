@@ -1134,8 +1134,77 @@ static const unsigned char *seatRemap (int seat)
 	return NULL;
 }
 
+/* ---- direct 8bpp helpers for the FFA overlays (goal circles, ball marker) ---- */
+#define GOAL_CIRCLE_IDX 3         /* Apple-palette red (0xDD0806) */
+
+static void plotPix (const BitMap *bm, unsigned char idx, int x, int y)
+{
+	if (x < bm->bounds.left || x >= bm->bounds.right ||
+	    y < bm->bounds.top  || y >= bm->bounds.bottom) return;
+	*((uint8_t *)bm->baseAddr + (long)(y - bm->bounds.top) * bm->rowBytes
+	  + (x - bm->bounds.left)) = idx;
+}
+
+static unsigned char peekBack (int x, int y)
+{
+	const BitMap *bm = &((GrafPtr)offCBackPtr)->portBits;
+	if (x < bm->bounds.left || x >= bm->bounds.right ||
+	    y < bm->bounds.top  || y >= bm->bounds.bottom) return 0;
+	return *((const uint8_t *)bm->baseAddr + (long)(y - bm->bounds.top) * bm->rowBytes
+	         + (x - bm->bounds.left));
+}
+
+/* filled downward-pointing triangle (apex at the bottom, toward the player) */
+static void drawDownTri (const BitMap *dst, int cx, int top, int w, int h, unsigned char idx)
+{
+	for (int r = 0; r < h; r++)
+	{
+		int half = (w / 2) * (h - 1 - r) / (h - 1);
+		for (int x = cx - half; x <= cx + half; x++)
+			plotPix(dst, idx, x, top + r);
+	}
+}
+
+/* The arena PICT only carries the two NORTHERN goal-circle marks; mirror them to
+ * the FFA-4 southern goals (reflection about the arena z-axis, SOUTH_MIRROR). */
+static void paint4SouthGoalCircles (void)
+{
+	static const short cx[2] = { 96, 544 };   /* large-arena north circle centers */
+	const BitMap *back   = &((GrafPtr)offCBackPtr)->portBits;
+	const BitMap *work   = &((GrafPtr)offCWorkPtr)->portBits;
+	const BitMap *screen = &(((GrafPtr)mainWndo)->portBits);
+	for (int i = 0; i < 2; i++)
+	{
+		for (int y = 86; y <= 122; y++)
+			for (int x = cx[i] - 16; x <= cx[i] + 16; x++)
+				if (peekBack(x, y) == GOAL_CIRCLE_IDX)
+					plotPix(back, GOAL_CIRCLE_IDX, x, SOUTH_MIRROR - y);
+		Rect box;
+		box.left = (short)(cx[i] - 16);          box.right  = (short)(cx[i] + 17);
+		box.top  = (short)(SOUTH_MIRROR - 122);  box.bottom = (short)(SOUTH_MIRROR - 85);
+		CopyBits(back, work,   &box, &box, srcCopy, kNilPointer);
+		CopyBits(back, screen, &box, &box, srcCopy, kNilPointer);
+	}
+}
+
+/* marker rect above the ball holder (empty when nobody holds the ball) */
+static int ballMarkerRect (Rect *out)
+{
+	if (ballOwner < 0 || ent[ballOwner]->mode != kInArena)
+		return 0;
+	playerType *h = ent[ballOwner];
+	short cx  = (short)((h->isRect.left + h->isRect.right) / 2);
+	short top = (short)(h->isRect.top - 13);
+	SetRect(out, (short)(cx - 8), (short)(top - 1), (short)(cx + 9), (short)(top + 10));
+	return 1;
+}
+
 static void render4Scene (void)
 {
+	static Rect markerWas = { 0, 0, 0, 0 };
+	static int  markerWasOn = 0;
+	Rect markerIs = { 0, 0, 0, 0 };
+	int  markerOn = drawThisFrame && ballMarkerRect(&markerIs);
 	const BitMap *parts = &((GrafPtr)offCPartsPtr)->portBits;
 	const BitMap *work = &((GrafPtr)offCWorkPtr)->portBits;
 	const BitMap *back = &((GrafPtr)offCBackPtr)->portBits;
@@ -1184,6 +1253,15 @@ static void render4Scene (void)
 			              &ent[i]->maskRect, &ent[i]->isRect, seatRemap(i));
 	}
 
+	/* ball-holder marker: a seat-colored, white-outlined caret over the holder */
+	if (markerOn)
+	{
+		short mcx = (short)((markerIs.left + markerIs.right) / 2);
+		short mtop = (short)(markerIs.top + 1);
+		drawDownTri(work, mcx, mtop, 15, 9, 0 /* white outline */);
+		drawDownTri(work, mcx, (short)(mtop + 1), 11, 7, seatColor[ballOwner]);
+	}
+
 	for (int i = 0; i < 4; i++)
 		if (ent[i]->mode != kInStasis && drawThisFrame)
 			CopyBits(work, screen, &whole[i], &whole[i], srcCopy, kNilPointer);
@@ -1198,6 +1276,15 @@ static void render4Scene (void)
 
 	if (showBoardCursor && !disableBoardCursor && drawThisFrame)
 		CopyBits(work, screen, &wholeCursor, &wholeCursor, srcCopy, kNilPointer);
+
+	/* publish the marker (and erase its previous position) on top of everything */
+	if (drawThisFrame && (markerOn || markerWasOn))
+	{
+		Rect wm = markerOn ? markerIs : markerWas;
+		if (markerOn && markerWasOn)
+			UnionRect(&markerIs, &markerWas, &wm);
+		CopyBits(work, screen, &wm, &wm, srcCopy, kNilPointer);
+	}
 
 	if (theDoor.stateChanged)
 	{
@@ -1217,6 +1304,14 @@ static void render4Scene (void)
 		CopyBits(back, work, &theBall.isRect, &theBall.isRect, srcCopy, kNilPointer);
 	if (showBoardCursor && !disableBoardCursor && drawThisFrame)
 		CopyBits(back, work, &boardCursor.isRect, &boardCursor.isRect, srcCopy, kNilPointer);
+	if (markerOn)
+		CopyBits(back, work, &markerIs, &markerIs, srcCopy, kNilPointer);
+
+	if (drawThisFrame)
+	{
+		markerWas = markerIs;
+		markerWasOn = markerOn;
+	}
 }
 
 /* ---------------------------------------------------------------- ball loop */
@@ -1334,14 +1429,19 @@ static void check4AbortiveInput (void)
 		DoSoundToggle();                     /* verbatim */
 	if (BitTst(&theKeyMap, kTabKeyMap))
 	{
-		/* inline pause: wait for a fresh Tab press */
+		/* inline pause screen (Esc or Tab): resume on a fresh Esc/Tab, or end the
+		 * game with E. Wait for the pause key to be released first so the same
+		 * press can't immediately resume. */
 		long pausedAt = Ticks;
 		int armed = 0;
 		GrafPtr wasPort;
 		RGBColor blackC;
+		const char *l1 = "PAUSED";
+		const char *l2 = "ESC = RESUME     E = END GAME";
 		GetPort(&wasPort);
 		SetPort((GrafPtr)mainWndo);
-		draw4Text((short)(screenWide / 2 - 100), 40, "PAUSED - PRESS TAB TO RESUME", 1);
+		draw4Text((short)(screenWide / 2 - (short)(strlen(l1) * 4)), 40, l1, 1);
+		draw4Text((short)(screenWide / 2 - (short)(strlen(l2) * 4)), 58, l2, 1);
 		Index2Color(15, &blackC);
 		RGBForeColor(&blackC);
 		SetPort(wasPort);
@@ -1355,16 +1455,24 @@ static void check4AbortiveInput (void)
 				fourWinner = -1;
 				break;
 			}
+			if (armed && BitTst(&theKeyMap, kEKeyMap))   /* end the game */
+			{
+				fourDone = 1;
+				fourWinner = -1;
+				break;
+			}
 			if (!BitTst(&theKeyMap, kTabKeyMap))
 				armed = 1;
 			else if (armed)
-				break;
+				break;                               /* resume */
 			SDL_Delay(10);
 		}
 		baseTime += (Ticks - pausedAt) / 60;
 		RedrawWholeScreen();
 		if (fourMode != FOUR_2V2)
 			drawAllChips();
+		if (fourMode == FOUR_FFA4)
+			paint4SouthGoalCircles();
 	}
 }
 
@@ -1502,6 +1610,8 @@ void PortFourRun (int mode, const int personas[4])
 				goalOwner[g] = g;
 		}
 		paintOwnedGoals();
+		if (mode == FOUR_FFA4)
+			paint4SouthGoalCircles();
 	}
 
 	baseTime = Ticks / 60;

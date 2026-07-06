@@ -235,12 +235,10 @@ void GetKeys (KeyMap theKeys)
 		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_NORTH))
 			setKeyBit(km, kR, 1);
 	}
-	/* Esc = end game (Cmd+E); window close = quit (Cmd+Q) */
+	/* Esc = pause (Tab) — the pause screen then offers to end the game;
+	 * window close = quit (Cmd+Q) */
 	if (ks[SDL_SCANCODE_ESCAPE])
-	{
-		setKeyBit(km, kCommand, 1);
-		setKeyBit(km, kE, 1);
-	}
+		setKeyBit(km, kTab, 1);
 	if (shimInput.quitRequested)
 	{
 		setKeyBit(km, kCommand, 1);
