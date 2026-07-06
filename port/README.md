@@ -74,9 +74,11 @@ Not yet ported: network play (AppleTalk in the original; see
 `../MODERNIZATION.md` for the protocol notes), the player-stats /
 world-records / names dialogs (stats are tracked and saved, just not
 viewable), the Help viewer, the About box, the animated cursor, the
-512×384 small-arena mode (all its data and art are in the pack), and the
-original alert dialogs (suppressed with sensible defaults — e.g.
-tournament-abort asks no confirmation).
+512×384 small-arena mode (all its data and art are in the pack), and most of
+the original alert dialogs. The two alerts that matter during play — the
+tournament forfeit confirmation (Esc/Ctrl+E) and the repeat-tournament
+notice — are shown as an in-game overlay answered with Y/N (or Return/Esc,
+or gamepad A/B); the rest are suppressed with sensible defaults.
 
 ## How the port works
 
