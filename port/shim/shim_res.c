@@ -67,11 +67,22 @@ Ptr NewPtr (Size byteCount)
 }
 void DisposPtr (Ptr p) { free(p); }
 
+/* Handles are a two-slot block: [0] the master pointer (so a Handle
+ * dereferences normally), [1] the block size, so GetHandleSize works.
+ * ShimNewHandleFor wraps an existing allocation the same way — shim_qd.c
+ * uses it for Picture and region handles, keeping every handle in the
+ * program size-tracked (DumpPict calls GetHandleSize on a PicHandle). */
+Handle ShimNewHandleFor (Ptr p, Size byteCount)
+{
+	Ptr *h = (Ptr *)malloc(2 * sizeof(Ptr));
+	h[0] = p;
+	h[1] = (Ptr)(intptr_t)byteCount;
+	return (Handle)h;
+}
+
 Handle NewHandle (Size byteCount)
 {
-	Handle h = (Handle)malloc(sizeof(Ptr));
-	*h = NewPtr(byteCount);
-	return h;
+	return ShimNewHandleFor(NewPtr(byteCount), byteCount);
 }
 void DisposHandle (Handle h) { if (h) { free(*h); free(h); } }
 void HLock (Handle h) { (void)h; }
@@ -80,7 +91,10 @@ void MoveHHi (Handle h) { (void)h; }
 void HNoPurge (Handle h) { (void)h; }
 char HGetState (Handle h) { (void)h; return 0; }
 void HSetState (Handle h, char state) { (void)h; (void)state; }
-long GetHandleSize (Handle h) { (void)h; return 0; }
+long GetHandleSize (Handle h)
+{
+	return h ? (long)(intptr_t)((Ptr *)h)[1] : 0;
+}
 OSErr HandToHand (Handle *theHndl) { (void)theHndl; return memFullErr; }
 void BlockMove (const void *src, void *dest, Size count) { memmove(dest, src, (size_t)count); }
 

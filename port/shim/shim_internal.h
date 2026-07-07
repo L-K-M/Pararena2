@@ -25,6 +25,10 @@ typedef struct ShimAsset {
 int  ShimLoadPack (const char *path);
 const ShimAsset *ShimFindAsset (uint32_t fourcc, int id);
 
+/* wrap an existing allocation as a size-tracked Handle (shim_res.c); every
+ * handle creator must use this (or NewHandle) so GetHandleSize is truthful */
+Handle ShimNewHandleFor (Ptr p, Size byteCount);
+
 /* ---------------- video / present ---------------- */
 extern uint8_t  shimPaletteRGBA[16][4];
 extern GrafPort *shimCurPort;

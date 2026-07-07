@@ -402,9 +402,7 @@ RgnHandle NewRgn (void)
 	if (!rgnW) { rgnW = screenBits.bounds.right; rgnH = screenBits.bounds.bottom; }
 	ShimRegion *rg = (ShimRegion *)calloc(1, sizeof(ShimRegion));
 	rg->rgnSize = (short)sizeof(ShimRegion);
-	ShimRegion **h = (ShimRegion **)malloc(sizeof(ShimRegion *));
-	*h = rg;
-	return h;
+	return (RgnHandle)ShimNewHandleFor((Ptr)rg, (Size)sizeof(ShimRegion));
 }
 
 void DisposeRgn (RgnHandle rgn)
@@ -585,9 +583,7 @@ PicHandle GetPicture (short picID)
 	pic->picFrame.right = (short)a->w;
 	pic->picFrame.bottom = (short)a->h;
 	pic->shimAssetId = picID;
-	Picture **h = (Picture **)malloc(sizeof(Picture *));
-	*h = pic;
-	return h;
+	return (PicHandle)ShimNewHandleFor((Ptr)pic, (Size)sizeof(Picture));
 }
 
 void DrawPicture (PicHandle myPicture, const Rect *dstRect)
