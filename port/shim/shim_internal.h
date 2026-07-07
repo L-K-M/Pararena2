@@ -39,6 +39,9 @@ void ShimForcePresent (void);
 void PortVideoPresent (const uint8_t *pix, int w, int h);
 void PortVideoSetFullscreen (int on);
 int  PortVideoIsFullscreen (void);
+/* window-normalized touch (0..1) -> logical render coords (0..640, 0..480),
+ * undoing the letterbox; 0 if headless/no renderer. */
+int  PortVideoTouchToLogical (float nx, float ny, float *lx, float *ly);
 
 /* ---------------- timing / events ---------------- */
 void ShimPumpEvents (void);      /* poll SDL, update Ticks/keymap/mouse; may sleep ~0.5ms */
@@ -66,6 +69,10 @@ typedef struct ShimInput {
 	 * Consumed by the pause key (enter pause) / the pause loops (a fresh press
 	 * ends the game) / the menu (acts like Escape). */
 	int     backEdge;
+	/* latched on-screen pause-button tap: set on the finger-down event (a quick
+	 * tap can fall between the polled-finger snapshots and be missed), consumed
+	 * by the pause key and cleared on pause entry. */
+	int     pauseTap;
 	/* on-screen touch controls (mobile): pressed states + stick deflection for
 	 * the overlay drawing, and the pause button (mapped to the pause key) */
 	int     mcCatch, mcBrake, mcPause;

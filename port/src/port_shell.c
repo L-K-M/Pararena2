@@ -17,10 +17,13 @@
 #include "Render.h"
 #include "controller_img.h"   /* embedded 1-bit dithered gamepad art */
 #ifdef __ANDROID__
-#include "pause_screen_mobile_img.h"  /* touch (P800) pause art, Atkinson-dithered */
+#include "pause_screen_mobile_img.h"  /* touch (P800) swipe-scheme pause art */
 #else
 #include "pause_screen_img.h"         /* gamepad pause art */
 #endif
+/* on-screen-scheme mobile pause art (unique symbols, so it coexists with either
+ * of the above); shown when the touch UI is in on-screen mode */
+#include "pause_screen_mobile_onscreen_img.h"
 #include "mobile_controls.h"          /* on-screen touch control layout */
 
 void PortInputSetPlayMode (int playing);
@@ -350,9 +353,23 @@ void DrawControlsCard (const char *title)
 	shimScreenDirty = 1;
 }
 
-/* The pause screen: the hand-drawn 640x480 1-bit pause art (pause_screen_img.h)
- * blitted over the whole window — white ground, black line-art + labels. Shared
- * by the 1v1 and four-player pause loops. */
+/* blit a bit-packed (MSB-first, 1 = black) full-screen 1-bit image over white */
+static void blitPauseBits (const BitMap *scr, const unsigned char *bits,
+                           int w, int h, int rowBytes)
+{
+	for (int y = 0; y < h; y++)
+	{
+		const unsigned char *row = bits + (long)y * rowBytes;
+		for (int x = 0; x < w; x++)
+			if (row[x >> 3] & (0x80 >> (x & 7)))
+				pxPlot(scr, IDX_BLACK, x, y);
+	}
+}
+
+/* The pause screen: a hand-drawn 640x480 1-bit image blitted over the whole
+ * window — white ground, black line-art + labels. On a touch device it shows the
+ * P800 art for the *active* control scheme (on-screen stick+buttons vs swipe);
+ * on desktop, the gamepad card. Shared by the 1v1 and four-player pause loops. */
 void DrawPauseScreen (void)
 {
 	GrafPtr wasPort;
@@ -365,13 +382,11 @@ void DrawPauseScreen (void)
 	SetRect(&full, 0, 0, (short)screenWide, (short)screenHigh);
 	PmForeColor(IDX_WHITE);
 	PaintRect(&full);
-	for (int y = 0; y < PAUSE_IMG_H; y++)
-	{
-		const unsigned char *row = pauseImgBits + (long)y * PAUSE_IMG_ROWBYTES;
-		for (int x = 0; x < PAUSE_IMG_W; x++)
-			if (row[x >> 3] & (0x80 >> (x & 7)))
-				pxPlot(scr, IDX_BLACK, x, y);
-	}
+	if (shimMobile && mobileOnScreen)
+		blitPauseBits(scr, pauseOnscreenImgBits, PAUSE_ONSCREEN_IMG_W,
+		              PAUSE_ONSCREEN_IMG_H, PAUSE_ONSCREEN_IMG_ROWBYTES);
+	else
+		blitPauseBits(scr, pauseImgBits, PAUSE_IMG_W, PAUSE_IMG_H, PAUSE_IMG_ROWBYTES);
 	Index2Color(IDX_BLACK, &c); RGBForeColor(&c);
 	SetPort(wasPort);
 	shimScreenDirty = 1;
@@ -741,47 +756,44 @@ static void menuActivate (void)
 }
 
 /* Touchscreen menu: hit-test a normalized tap (nx,ny) against the on-screen
- * rows using the exact geometry drawMenu() lays out. First tap on a row selects
- * it; a tap on the already-selected row activates it (start / open / cycle) —
- * so a stray tap only moves the highlight, it can't launch a game. */
+ * rows using the exact geometry drawMenu() lays out. A tap highlights the row it
+ * lands on; a second tap on that same row activates it (start / open / cycle).
+ * Activation is gated on the row having been highlighted BY A TAP — the startup
+ * default (START pre-selected) is not enough — so the first tap anywhere can only
+ * move the highlight, never launch a game. The (page,row) pair is remembered so
+ * switching pages or navigating by key/pad re-requires a selecting tap first. */
 static void menuTapHit (float nx, float ny)
 {
+	static int armedPage = -1, armedRow = -1;
 	int px = (int)(nx * screenWide);
 	int py = (int)(ny * screenHigh);
 	short pLeft   = (short)(screenWide / 2 - 190);
 	short pRight  = (short)(screenWide / 2 + 190);
 	short pTop    = (short)(screenHigh / 2 - 120);
 	short pBottom = (short)(screenHigh / 2 + 120);
+	int count, hit = -1;
+	int *selp;
 
 	if (px < pLeft || px > pRight || py < pTop || py > pBottom)
 		return;                                /* outside the panel: ignore */
 
-	if (menuPage == PAGE_MAIN)
+	if (menuPage == PAGE_MAIN) { buildMenuItems(); count = visCount; selp = &menuSel; }
+	else                       { count = OI_COUNT;                  selp = &optSel;  }
+
+	for (int i = 0; i < count; i++)
 	{
-		buildMenuItems();
-		for (int i = 0; i < visCount; i++)
-		{
-			int y = pTop + 48 + i * 19;
-			if (py >= y - 16 && py <= y + 3)
-			{
-				if (menuSel == i) menuActivate();
-				else { menuSel = i; menuDirty = 1; }
-				return;
-			}
-		}
+		int y    = (menuPage == PAGE_MAIN) ? pTop + 48 + i * 19 : pTop + 42 + i * 17;
+		int band = (menuPage == PAGE_MAIN) ? 16 : 14;
+		if (py >= y - band && py <= y + 3) { hit = i; break; }
 	}
+	if (hit < 0)
+		return;                                /* between rows: ignore */
+
+	if (armedPage == menuPage && armedRow == hit && *selp == hit)
+		menuActivate();                        /* second tap on the same row */
 	else
 	{
-		for (int i = 0; i < OI_COUNT; i++)
-		{
-			int y = pTop + 42 + i * 17;
-			if (py >= y - 14 && py <= y + 3)
-			{
-				if (optSel == i) menuActivate();
-				else { optSel = i; menuDirty = 1; }
-				return;
-			}
-		}
+		*selp = hit; armedPage = menuPage; armedRow = hit; menuDirty = 1;
 	}
 }
 
@@ -809,6 +821,7 @@ void HandleEvent (void)
 		ShimForcePresent();
 		shimInput.tapFresh = 0;                  /* ignore any tap still pending */
 		shimInput.backEdge = 0;                  /* the Back press that opened this is spent */
+		shimInput.pauseTap = 0;
 
 		for (;;)
 		{
@@ -820,12 +833,10 @@ void HandleEvent (void)
 				pausing = FALSE; primaryMode = kIdleMode;
 				break;
 			}
-			if (shimInput.tapFresh)              /* touch: tap left = resume, right = end */
+			if (shimInput.tapFresh)              /* touch: tap anywhere resumes (Back ends) */
 			{
-				int right = shimInput.tapX >= 0.5f;
 				shimInput.tapFresh = 0;
 				pausing = FALSE;
-				if (right) primaryMode = kIdleMode;
 				break;
 			}
 			const bool *ks = SDL_GetKeyboardState(NULL);
@@ -850,6 +861,11 @@ void HandleEvent (void)
 			if (!resumeHeld && !endHeld) armed = 1;
 			SDL_Delay(10);
 		}
+		/* drop any pause latch the resume tap itself set (e.g. a tap that landed
+		 * on the top-centre pause column), so play doesn't instantly re-pause */
+		shimInput.pauseTap = 0;
+		shimInput.backEdge = 0;
+		shimInput.tapFresh = 0;
 		return;
 	}
 

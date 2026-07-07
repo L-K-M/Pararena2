@@ -84,4 +84,23 @@ void PortVideoSetFullscreen (int on)
 	isFullscreen = on;
 }
 
+/* Convert a window-normalized touch point (nx,ny in 0..1, the way SDL reports
+ * finger coords) to logical render coords: lx in 0..640, ly in 0..480. SDL's
+ * touch coordinates are relative to the whole window, so on a phone — where the
+ * 4:3 image is letterboxed/pillarboxed inside a wider window — a raw nx*640 is
+ * offset and scaled wrong. SDL_RenderCoordinatesFromWindow undoes the logical
+ * presentation (letterbox + scale). Returns 0 only with no renderer (headless);
+ * otherwise lx/ly are filled and may fall outside 0..640/0..480 when the touch
+ * lands in a letterbox bar (callers reject those via their hit-test bounds). */
+int PortVideoTouchToLogical (float nx, float ny, float *lx, float *ly)
+{
+	int ww = 0, wh = 0;
+	if (!ren || !win)
+		return 0;
+	SDL_GetWindowSize(win, &ww, &wh);         /* window points; RenderCoordinatesFromWindow expects points */
+	if (ww <= 0 || wh <= 0)
+		return 0;
+	return SDL_RenderCoordinatesFromWindow(ren, nx * (float)ww, ny * (float)wh, lx, ly) ? 1 : 0;
+}
+
 int PortVideoIsFullscreen (void) { return isFullscreen; }

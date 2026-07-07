@@ -1615,6 +1615,7 @@ static void check4AbortiveInput (void)
 		ShimForcePresent();
 		shimInput.tapFresh = 0;                      /* ignore any pending tap */
 		shimInput.backEdge = 0;                      /* the Back press that opened this is spent */
+		shimInput.pauseTap = 0;
 		for (;;)
 		{
 			GetKeys(theKeyMap);
@@ -1632,11 +1633,9 @@ static void check4AbortiveInput (void)
 				fourWinner = -1;
 				break;
 			}
-			if (shimInput.tapFresh)                  /* touch: tap left = resume, right = end */
+			if (shimInput.tapFresh)                  /* touch: tap anywhere resumes (Back ends) */
 			{
-				int right = shimInput.tapX >= 0.5f;
 				shimInput.tapFresh = 0;
-				if (right) { fourDone = 1; fourWinner = -1; }
 				break;
 			}
 			if (armed && (BitTst(&theKeyMap, kEKeyMap) ||
@@ -1652,6 +1651,11 @@ static void check4AbortiveInput (void)
 				break;                               /* resume */
 			SDL_Delay(10);
 		}
+		/* drop any pause latch the resume tap itself set (a top-centre tap), so the
+		 * game loop's next check4AbortiveInput doesn't instantly re-pause */
+		shimInput.pauseTap = 0;
+		shimInput.backEdge = 0;
+		shimInput.tapFresh = 0;
 		baseTime += (Ticks - pausedAt) / 60;
 		RedrawWholeScreen();
 		if (fourMode != FOUR_2V2)

@@ -50,9 +50,13 @@ main menu**. **Menus** are driven by direct taps: **tap a row to highlight it,
 tap it again to choose it** (start the game, open a submenu, or cycle a value);
 Back leaves a submenu / jumps the highlight to QUIT.
 
-The pause screen (a dithered Sony Ericsson P800 showing the touch layout) is
-dismissed by touch: **tap the left half to resume, the right half to end the
-game** (Back also ends it, returning to the menu).
+The pause screen is a dithered Sony Ericsson P800 that shows the layout of the
+**active** scheme (on-screen stick+buttons, or the swipe zones). **Tap anywhere
+to resume**; press **Back to end the game** and return to the menu.
+
+Touch coordinates are mapped through the renderer's letterbox
+(`SDL_RenderCoordinatesFromWindow`), so every hit-test is correct regardless of
+the phone's aspect ratio / pillarboxing.
 
 A connected gamepad (Bluetooth or USB) also works everywhere and adds *bash*
 (West button), which touch doesn't expose yet.

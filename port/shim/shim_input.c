@@ -78,8 +78,28 @@ void PortInputSetPlayMode (int playing)
 	moveOn = 0; tfN = 0; moveDefX = moveDefY = 0;
 }
 
+/* SDL reports finger coords normalized to the whole window; on a phone the 4:3
+ * image is letterboxed inside a wider window, so convert to content-normalized
+ * (0..1 across the visible 640x480 image) before any hit-test. Identity on a
+ * 4:3 desktop window (and headless), so --mobile testing is unaffected. */
+static void touchToContent (float wx, float wy, float *cx, float *cy)
+{
+	float lx, ly;
+	if (PortVideoTouchToLogical(wx, wy, &lx, &ly))
+	{
+		*cx = lx / 640.0f;
+		*cy = ly / 480.0f;
+	}
+	else
+	{
+		*cx = wx; *cy = wy;                    /* no renderer: nothing to undo */
+	}
+}
+
 static void touchDown (SDL_FingerID id, float x, float y)
 {
+	touchToContent(x, y, &x, &y);              /* window-normalized -> content-normalized */
+
 	/* record the raw tap (any mode): the menu hit-tests it against its rows and
 	 * the pause screen uses it for tap-to-resume / tap-to-end */
 	shimInput.tapFresh = 1; shimInput.tapX = x; shimInput.tapY = y;
@@ -88,9 +108,14 @@ static void touchDown (SDL_FingerID id, float x, float y)
 		return;                                /* menu taps handled in HandleEvent */
 
 	/* during play, the pause button and the on-screen pad are handled by polling,
-	 * not the swipe machinery — keep their fingers out of it */
+	 * not the swipe machinery — keep their fingers out of it. The pause button is
+	 * also latched here on the down-event so a quick tap can't slip between the
+	 * finger-state polls and be lost (the reported "tapping pause does nothing"). */
 	if (shimMobile && MC_HIT(x, y, MC_PAUSE_CX, MC_PAUSE_CY, MC_PAUSE_R + 8))
+	{
+		shimInput.pauseTap = 1;
 		return;
+	}
 	if (shimMobile && mobileOnScreen)
 		return;
 
@@ -109,6 +134,7 @@ static void touchDown (SDL_FingerID id, float x, float y)
 
 static void touchMotion (SDL_FingerID id, float x, float y)
 {
+	touchToContent(x, y, &x, &y);              /* window-normalized -> content-normalized */
 	if (moveOn && id == moveId)
 	{
 		moveDefX = (x - moveAnchorX) / TOUCH_RADIUS;
@@ -268,7 +294,8 @@ void ShimPumpEvents (void)
 			SDL_Finger **fs = SDL_GetTouchFingers(devs ? devs[di] : 0, &nf);
 			for (int fi = 0; fs && fi < nf; fi++)
 			{
-				float fx = fs[fi]->x, fy = fs[fi]->y;
+				float fx, fy;
+				touchToContent(fs[fi]->x, fs[fi]->y, &fx, &fy);
 				if (MC_HIT(fx, fy, MC_PAUSE_CX, MC_PAUSE_CY, MC_PAUSE_R + 8)) { shimInput.mcPause = 1; continue; }
 				if (!mobileOnScreen) continue;
 				int sxp = (int)(fx * 640), syp = (int)(fy * 480);
@@ -386,7 +413,7 @@ void GetKeys (KeyMap theKeys)
 	 * from its key event) and the on-screen pause button pause too. backEdge
 	 * stays latched until a pause loop / the menu consumes it, so the press is
 	 * never lost between snapshots. */
-	if (ks[SDL_SCANCODE_ESCAPE] || shimInput.backEdge || shimInput.mcPause)
+	if (ks[SDL_SCANCODE_ESCAPE] || shimInput.backEdge || shimInput.mcPause || shimInput.pauseTap)
 		setKeyBit(km, kTab, 1);
 	if (shimInput.quitRequested)
 	{
