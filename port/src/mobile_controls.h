@@ -19,6 +19,10 @@
 #define MC_BRAKE_CX   596    /* brake */
 #define MC_BRAKE_CY   316
 #define MC_BRAKE_R    30
+#define MC_BASH_CX    482    /* bash (dash / tackle) — up-left of catch, far
+                              * enough that the +8 px hit margins don't overlap */
+#define MC_BASH_CY    344
+#define MC_BASH_R     30
 
 /* pause button (top-centre, clear of the corner scoreboards/chips). Kept well
  * below the top edge: on Android the letterboxed 4:3 image fills the screen

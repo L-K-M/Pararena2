@@ -75,7 +75,7 @@ typedef struct ShimInput {
 	int     pauseTap;
 	/* on-screen touch controls (mobile): pressed states + stick deflection for
 	 * the overlay drawing, and the pause button (mapped to the pause key) */
-	int     mcCatch, mcBrake, mcPause;
+	int     mcCatch, mcBrake, mcBash, mcPause;
 	int     mcStickActive; float mcThumbX, mcThumbY;   /* -1..1 */
 } ShimInput;
 

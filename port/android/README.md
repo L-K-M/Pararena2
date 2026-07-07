@@ -38,7 +38,9 @@ There are two touch schemes, chosen by **Options → TOUCH CONTROLS**:
 
 - **ON-SCREEN** (default) — a visible analog stick (bottom-left) you drag to
   skate, plus visible action buttons bottom-right: **catch / throw** (the ball
-  dot) and **brake** (the bar).
+  dot), **brake** (the bar), and **bash** (the X — the dash/tackle lunge; as
+  with keyboard/gamepad bash it only fires while not carrying the ball and
+  not braking).
 - **SWIPE** — no visible controls: drag the **left half** of the screen to skate
   (a relative joystick from wherever you press), tap the **right half** for
   **catch** (upper) / **brake** (lower).
@@ -58,8 +60,9 @@ Touch coordinates are mapped through the renderer's letterbox
 (`SDL_RenderCoordinatesFromWindow`), so every hit-test is correct regardless of
 the phone's aspect ratio / pillarboxing.
 
-A connected gamepad (Bluetooth or USB) also works everywhere and adds *bash*
-(West button), which touch doesn't expose yet.
+A connected gamepad (Bluetooth or USB) also works everywhere (bash is the
+West button). In the SWIPE scheme, bash still needs a gamepad or keyboard —
+the swipe zones only cover catch and brake.
 
 ## Notes / limitations
 
