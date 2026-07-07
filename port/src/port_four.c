@@ -34,7 +34,8 @@ int  ShimPadRead (int idx, float *x, float *y, int *btn, int *brake, int *bash);
 void PortInputSetPlayMode (int playing);
 /* port_shell.c */
 void DoOpeningAnnouncer (void);
-void DrawControlsCard (const char *title);   /* pause-screen controls card */
+void DrawControlsCard (const char *title);   /* menu controls card */
+void DrawPauseScreen (void);                 /* full-screen pause art */
 extern int classicMode;                      /* Options toggle: hide HUD enhancements */
 
 /* ---------------------------------------------------------------- state */
@@ -1606,17 +1607,8 @@ static void check4AbortiveInput (void)
 		 * first so the entry press can't immediately resume or end. */
 		long pausedAt = Ticks;
 		int armed = 0;
-		GrafPtr wasPort;
-		RGBColor blackC;
-		const char *l2 = "ESC / START = RESUME     E / BACK = END GAME";
-		DrawControlsCard("PAUSED");
-		GetPort(&wasPort);
-		SetPort((GrafPtr)mainWndo);
-		draw4Text((short)(screenWide / 2 - (short)(strlen(l2) * 4)),
-		          (short)(screenHigh / 2 + 178), l2, 15);   /* black on the white card */
-		Index2Color(15, &blackC);
-		RGBForeColor(&blackC);
-		SetPort(wasPort);
+		DrawPauseScreen();
+		ShimForcePresent();
 		for (;;)
 		{
 			GetKeys(theKeyMap);

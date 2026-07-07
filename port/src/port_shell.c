@@ -16,6 +16,7 @@
 #include "SoundUtils.h"
 #include "Render.h"
 #include "controller_img.h"   /* embedded 1-bit dithered gamepad art */
+#include "pause_screen_img.h" /* embedded 1-bit full-screen pause art */
 
 void PortInputSetPlayMode (int playing);
 void PortFourRun (int mode, const int personas[4]);   /* port_four.c */
@@ -328,6 +329,33 @@ void DrawControlsCard (const char *title)
 	         "KEYBOARD:  MOUSE=SKATE  X=CATCH  SPACE=BRAKE  B/N/M=BASH", IDX_BLACK);
 	#undef ROW
 
+	Index2Color(IDX_BLACK, &c); RGBForeColor(&c);
+	SetPort(wasPort);
+	shimScreenDirty = 1;
+}
+
+/* The pause screen: the hand-drawn 640x480 1-bit pause art (pause_screen_img.h)
+ * blitted over the whole window — white ground, black line-art + labels. Shared
+ * by the 1v1 and four-player pause loops. */
+void DrawPauseScreen (void)
+{
+	GrafPtr wasPort;
+	RGBColor c;
+	const BitMap *scr = &(((GrafPtr)mainWndo)->portBits);
+	Rect full;
+
+	GetPort(&wasPort);
+	SetPort((GrafPtr)mainWndo);
+	SetRect(&full, 0, 0, (short)screenWide, (short)screenHigh);
+	PmForeColor(IDX_WHITE);
+	PaintRect(&full);
+	for (int y = 0; y < PAUSE_IMG_H; y++)
+	{
+		const unsigned char *row = pauseImgBits + (long)y * PAUSE_IMG_ROWBYTES;
+		for (int x = 0; x < PAUSE_IMG_W; x++)
+			if (row[x >> 3] & (0x80 >> (x & 7)))
+				pxPlot(scr, IDX_BLACK, x, y);
+	}
 	Index2Color(IDX_BLACK, &c); RGBForeColor(&c);
 	SetPort(wasPort);
 	shimScreenDirty = 1;
@@ -653,27 +681,17 @@ void HandleEvent (void)
 		return;
 	}
 
-	/* paused mid-game (1v1): show the same controls-card pause screen the
-	 * four-player modes use, and resume on Esc / Tab / pad Start or end the game
+	/* paused mid-game (1v1): show the same full-screen pause art the four-player
+	 * modes use, and resume on Esc / Tab / pad Start or end the game
 	 * with E / pad Back. The game sets pausing while the pause key is still held,
 	 * so wait for a release ("armed") before a fresh press counts — otherwise the
 	 * entry press would instantly resume. Ending a game is just primaryMode =
 	 * kIdleMode (what the original's Cmd+E abort does for a standard game). */
 	if (primaryMode == kPlayMode && pausing)
 	{
-		GrafPtr wp;
-		RGBColor blackC;
-		const char *l2 = "ESC / TAB = RESUME     E = END GAME";
 		int armed = 0;
 
-		DrawControlsCard("PAUSED");
-		GetPort(&wp);
-		SetPort((GrafPtr)mainWndo);
-		drawText((short)(screenWide / 2 - (short)(strlen(l2) * 4)),
-		         (short)(screenHigh / 2 + 178), l2, IDX_BLACK);
-		Index2Color(IDX_BLACK, &blackC);
-		RGBForeColor(&blackC);
-		SetPort(wp);
+		DrawPauseScreen();
 		ShimForcePresent();
 
 		for (;;)

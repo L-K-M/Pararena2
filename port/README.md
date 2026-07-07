@@ -92,8 +92,8 @@ setting persists across launches.
 | Quit | Ctrl+Q / close window | — |
 | Fullscreen | F11 or Alt+Enter | — |
 
-Pausing (Esc / Tab / Start) works the same in every mode: it brings up a
-controls card that you resume from (Esc / Tab / Start) or end the game from
+Pausing (Esc / Tab / Start) works the same in every mode: it brings up the
+pause screen that you resume from (Esc / Tab / Start) or end the game from
 (E / Back).
 
 The original controls were mouse-only: pointer deflection from screen
