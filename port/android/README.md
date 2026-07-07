@@ -39,7 +39,12 @@ The game's input is a mouse-deflection "skate" vector, mapped to touch as:
 - **Left half of the screen** — a relative virtual joystick: press anywhere and
   drag; the drag direction/length is your thrust (release to coast).
 - **Right half** — **upper** = catch / throw, **lower** = brake.
+- **Back button** — pause / resume.
 - **Menus** — tap the top / middle / bottom third to move up / select / down.
+
+The pause screen (a dithered Sony Ericsson P800 showing the touch layout) is
+dismissed by touch: **tap the left half to resume, the right half to end the
+game** (Back also resumes).
 
 A connected gamepad (Bluetooth or USB) also works everywhere and adds *bash*
 (West button), which touch doesn't expose yet.

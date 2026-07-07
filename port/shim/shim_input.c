@@ -78,6 +78,9 @@ void PortInputSetPlayMode (int playing)
 
 static void touchDown (SDL_FingerID id, float x, float y)
 {
+	/* record the raw tap for the pause screen (any mode) */
+	shimInput.tapFresh = 1; shimInput.tapX = x; shimInput.tapY = y;
+
 	if (!inPlayMode)
 	{
 		if (y < 0.34f)      shimInput.menuTapUp = 1;
@@ -323,8 +326,9 @@ void GetKeys (KeyMap theKeys)
 			setKeyBit(km, kR, 1);
 	}
 	/* Esc = pause (Tab) — the pause screen then offers to end the game;
-	 * window close = quit (Cmd+Q) */
-	if (ks[SDL_SCANCODE_ESCAPE])
+	 * window close = quit (Cmd+Q). On Android the hardware Back button (trapped
+	 * as a key via SDL_HINT_ANDROID_TRAP_BACK_BUTTON) also pauses. */
+	if (ks[SDL_SCANCODE_ESCAPE] || ks[SDL_SCANCODE_AC_BACK])
 		setKeyBit(km, kTab, 1);
 	if (shimInput.quitRequested)
 	{

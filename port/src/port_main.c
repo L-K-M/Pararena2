@@ -93,6 +93,8 @@ int main (int argc, char **argv)
 	/* the shim handles touch directly (virtual joystick + on-screen buttons);
 	 * stop SDL from also turning touches into mouse events, which would fight it */
 	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+	/* deliver Android's Back button as a key (pause) instead of backgrounding */
+	SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
 
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS))
 	{

@@ -60,6 +60,9 @@ typedef struct ShimInput {
 	/* one-shot touch taps for menu navigation (set by the touch handler while
 	 * not in play mode, consumed + cleared by the port's HandleEvent) */
 	int     menuTapUp, menuTapDown, menuTapSelect;
+	/* one-shot raw touch-down (any mode), for the pause screen's tap-to-resume /
+	 * tap-to-end; tapX/tapY are normalized 0..1, consumer clears tapFresh */
+	int     tapFresh; float tapX, tapY;
 } ShimInput;
 extern ShimInput shimInput;
 

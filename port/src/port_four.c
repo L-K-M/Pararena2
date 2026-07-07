@@ -1609,6 +1609,7 @@ static void check4AbortiveInput (void)
 		int armed = 0;
 		DrawPauseScreen();
 		ShimForcePresent();
+		shimInput.tapFresh = 0;                      /* ignore any pending tap */
 		for (;;)
 		{
 			GetKeys(theKeyMap);
@@ -1617,6 +1618,13 @@ static void check4AbortiveInput (void)
 				quitting = TRUE;
 				fourDone = 1;
 				fourWinner = -1;
+				break;
+			}
+			if (shimInput.tapFresh)                  /* touch: tap left = resume, right = end */
+			{
+				int right = shimInput.tapX >= 0.5f;
+				shimInput.tapFresh = 0;
+				if (right) { fourDone = 1; fourWinner = -1; }
 				break;
 			}
 			if (armed && (BitTst(&theKeyMap, kEKeyMap) ||

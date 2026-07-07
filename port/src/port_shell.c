@@ -16,7 +16,11 @@
 #include "SoundUtils.h"
 #include "Render.h"
 #include "controller_img.h"   /* embedded 1-bit dithered gamepad art */
-#include "pause_screen_img.h" /* embedded 1-bit full-screen pause art */
+#ifdef __ANDROID__
+#include "pause_screen_mobile_img.h"  /* touch (P800) pause art, Atkinson-dithered */
+#else
+#include "pause_screen_img.h"         /* gamepad pause art */
+#endif
 
 void PortInputSetPlayMode (int playing);
 void PortFourRun (int mode, const int personas[4]);   /* port_four.c */
@@ -693,13 +697,22 @@ void HandleEvent (void)
 
 		DrawPauseScreen();
 		ShimForcePresent();
+		shimInput.tapFresh = 0;                  /* ignore any tap still pending */
 
 		for (;;)
 		{
 			ShimPumpEvents();
 			if (shimInput.quitRequested) { quitting = TRUE; pausing = FALSE; primaryMode = kIdleMode; break; }
+			if (shimInput.tapFresh)              /* touch: tap left = resume, right = end */
+			{
+				int right = shimInput.tapX >= 0.5f;
+				shimInput.tapFresh = 0;
+				pausing = FALSE;
+				if (right) primaryMode = kIdleMode;
+				break;
+			}
 			const bool *ks = SDL_GetKeyboardState(NULL);
-			int resumeHeld = ks[SDL_SCANCODE_TAB] || ks[SDL_SCANCODE_ESCAPE] || shimInput.padStart;
+			int resumeHeld = ks[SDL_SCANCODE_TAB] || ks[SDL_SCANCODE_ESCAPE] || ks[SDL_SCANCODE_AC_BACK] || shimInput.padStart;
 			int endHeld    = ks[SDL_SCANCODE_E] || ShimAnyPadButton(SDL_GAMEPAD_BUTTON_BACK);
 			if (armed && endHeld)    { pausing = FALSE; primaryMode = kIdleMode; break; }  /* end game */
 			if (armed && resumeHeld)
@@ -711,7 +724,7 @@ void HandleEvent (void)
 				{
 					ShimPumpEvents();
 					ks = SDL_GetKeyboardState(NULL);
-					resumeHeld = ks[SDL_SCANCODE_TAB] || ks[SDL_SCANCODE_ESCAPE] || shimInput.padStart;
+					resumeHeld = ks[SDL_SCANCODE_TAB] || ks[SDL_SCANCODE_ESCAPE] || ks[SDL_SCANCODE_AC_BACK] || shimInput.padStart;
 					SDL_Delay(10);
 				}
 				pausing = FALSE;                                                          /* resume */
