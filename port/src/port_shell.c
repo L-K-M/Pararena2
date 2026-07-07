@@ -467,18 +467,34 @@ static void ShowControlsScreen (void)
 	DrawControlsCard("CONTROLS");
 	GetPort(&wp);
 	SetPort((GrafPtr)mainWndo);
-	drawText((short)(screenWide / 2 - 92), (short)(screenHigh / 2 + 178),
-	         "PRESS ANY KEY TO RETURN", IDX_BLACK);
+	drawText((short)(screenWide / 2 - (shimMobile ? 104 : 92)),
+	         (short)(screenHigh / 2 + 178),
+	         shimMobile ? "TAP OR PRESS ANY KEY TO RETURN"
+	                    : "PRESS ANY KEY TO RETURN", IDX_BLACK);
 	Index2Color(IDX_BLACK, &c); RGBForeColor(&c);
 	SetPort(wp);
 	shimScreenDirty = 1;
 	ShimForcePresent();
 
 	if (shimHeadless) { menuDirty = 1; return; }
+	/* the tap/Back that opened this screen may still be latched — spend it,
+	 * or a touch-only device would dismiss the card the instant it opens */
+	shimInput.tapFresh = 0;
+	shimInput.backEdge = 0;
 	for (;;)
 	{
 		ShimPumpEvents();
 		if (shimInput.quitRequested) { quitting = TRUE; break; }
+		if (shimInput.tapFresh)              /* touch: a fresh tap returns */
+		{
+			shimInput.tapFresh = 0;
+			break;
+		}
+		if (shimInput.backEdge)              /* Android Back returns too */
+		{
+			shimInput.backEdge = 0;
+			break;
+		}
 		if (!controlsDismiss()) armed = 1;   /* wait for release, then any press */
 		else if (armed) break;
 		SDL_Delay(10);

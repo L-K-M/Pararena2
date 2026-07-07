@@ -210,12 +210,19 @@ static short alertModal (const unsigned char *message, const char *fallback,
 	}
 	alertCText((short)(panel.left + 24), (short)(panel.bottom - 36), yesLabel, 0);
 	alertCText((short)(panel.left + 24), (short)(panel.bottom - 20), noLabel, 0);
+	if (shimMobile)
+		alertCText((short)(panel.left + 24), (short)(panel.top + 16),
+		           "TAP AN ANSWER:", 13);
 	SetPort(wasPort);
 	ShimForcePresent();
 
 	/* wait for the triggering keys/buttons to clear, then for an answer;
-	 * pad South answers yes, pad East answers no */
+	 * pad South answers yes, pad East answers no. On a touch device the two
+	 * answer lines are tappable and the Back button answers no — without
+	 * this, a phone (no keyboard, no pad) could never leave the alert. */
 	const bool *ks;
+	shimInput.tapFresh = 0;                 /* spend any tap that got us here */
+	shimInput.backEdge = 0;
 	for (;;)
 	{
 		ShimPumpEvents();
@@ -231,6 +238,24 @@ static short alertModal (const unsigned char *message, const char *fallback,
 	{
 		ShimPumpEvents();
 		ShimTickSleep();
+		if (shimInput.tapFresh)             /* touch: tap one of the answer rows */
+		{
+			int px = (int)(shimInput.tapX * W);
+			int py = (int)(shimInput.tapY * H);
+			shimInput.tapFresh = 0;
+			if (px >= panel.left && px <= panel.right)
+			{
+				if (py >= panel.bottom - 46 && py < panel.bottom - 28)
+					return yesReturns;
+				if (py >= panel.bottom - 28 && py <= panel.bottom - 10)
+					return noReturns;
+			}
+		}
+		if (shimInput.backEdge)             /* Android Back = cancel */
+		{
+			shimInput.backEdge = 0;
+			return noReturns;
+		}
 		ks = SDL_GetKeyboardState(NULL);
 		if (ks[SDL_SCANCODE_Y] || ks[SDL_SCANCODE_RETURN] || shimInput.buttonDown)
 			return yesReturns;
