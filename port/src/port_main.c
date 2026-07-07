@@ -65,6 +65,8 @@ int main (int argc, char **argv)
 			shimFrameDumpDir = argv[++i];
 		else if (strcmp(argv[i], "--dump-every") == 0 && i + 1 < argc)
 			shimFrameDumpEvery = atoi(argv[++i]);
+		else if (strcmp(argv[i], "--mobile") == 0)
+			shimMobile = 1;                 /* force touch UI on desktop (testing) */
 		else if (strcmp(argv[i], "--fast") == 0 && i + 1 < argc)
 		{
 			extern int shimTickMult;
@@ -83,6 +85,10 @@ int main (int argc, char **argv)
 			return 0;
 		}
 	}
+
+#ifdef __ANDROID__
+	shimMobile = 1;                         /* always a touch device */
+#endif
 
 	if (shimHeadless)
 	{

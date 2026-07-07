@@ -8,6 +8,7 @@
 long randSeed = 1;
 
 int  shimHeadless = 0;
+int  shimMobile = 0;              /* touch device: show on-screen controls + pause */
 long shimAutoQuitTicks = 0;
 const char *shimFrameDumpDir = NULL;
 int  shimFrameDumpEvery = 60;

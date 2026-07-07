@@ -22,8 +22,10 @@
 
 #include <SDL3/SDL.h>
 #include "shim_internal.h"
+#include "mobile_controls.h"
 
 ShimInput shimInput;
+extern int mobileOnScreen;            /* Options toggle (port_shell.c) */
 
 static SDL_Gamepad *pad;              /* first pad (merged single-player input) */
 static SDL_Gamepad *padList[4];       /* all pads by connect order (4P seats) */
@@ -88,6 +90,14 @@ static void touchDown (SDL_FingerID id, float x, float y)
 		else                shimInput.menuTapSelect = 1;
 		return;
 	}
+
+	/* during play, the pause button and the on-screen pad are handled by polling,
+	 * not the swipe machinery — keep their fingers out of it */
+	if (shimMobile && MC_HIT(x, y, MC_PAUSE_CX, MC_PAUSE_CY, MC_PAUSE_R + 8))
+		return;
+	if (shimMobile && mobileOnScreen)
+		return;
+
 	if (x < 0.5f)                              /* left half: movement joystick */
 	{
 		if (!moveOn) { moveOn = 1; moveId = id; moveAnchorX = x; moveAnchorY = y; moveDefX = moveDefY = 0; }
@@ -243,6 +253,43 @@ void ShimPumpEvents (void)
 	int touchActive = moveOn && (moveDefX > 0.06f || moveDefX < -0.06f ||
 	                             moveDefY > 0.06f || moveDefY < -0.06f);
 
+	/* mobile on-screen controls + pause button, polled from all active fingers */
+	shimInput.mcCatch = shimInput.mcBrake = shimInput.mcPause = 0;
+	shimInput.mcStickActive = 0;
+	if (shimMobile)
+	{
+		float mdx = 0, mdy = 0; int stick = 0, ndev = 0;
+		SDL_TouchID *devs = SDL_GetTouchDevices(&ndev);
+		for (int di = 0; di < ndev; di++)
+		{
+			int nf = 0;
+			SDL_Finger **fs = SDL_GetTouchFingers(devs ? devs[di] : 0, &nf);
+			for (int fi = 0; fs && fi < nf; fi++)
+			{
+				float fx = fs[fi]->x, fy = fs[fi]->y;
+				if (MC_HIT(fx, fy, MC_PAUSE_CX, MC_PAUSE_CY, MC_PAUSE_R + 8)) { shimInput.mcPause = 1; continue; }
+				if (!mobileOnScreen) continue;
+				int sxp = (int)(fx * 640), syp = (int)(fy * 480);
+				if (MC_HIT(fx, fy, MC_STICK_CX, MC_STICK_CY, MC_STICK_R + 20))
+				{
+					int travel = MC_STICK_R - MC_STICK_TR;
+					mdx = (float)(sxp - MC_STICK_CX) / travel;
+					mdy = (float)(syp - MC_STICK_CY) / travel;
+					if (mdx >  1) mdx =  1; if (mdx < -1) mdx = -1;
+					if (mdy >  1) mdy =  1; if (mdy < -1) mdy = -1;
+					stick = 1;
+				}
+				else if (MC_HIT(fx, fy, MC_CATCH_CX, MC_CATCH_CY, MC_CATCH_R + 8)) shimInput.mcCatch = 1;
+				else if (MC_HIT(fx, fy, MC_BRAKE_CX, MC_BRAKE_CY, MC_BRAKE_R + 8)) shimInput.mcBrake = 1;
+			}
+			SDL_free(fs);
+		}
+		SDL_free(devs);
+		shimInput.mcStickActive = stick;
+		shimInput.mcThumbX = stick ? mdx : 0;
+		shimInput.mcThumbY = stick ? mdy : 0;
+	}
+
 	if (inPlayMode)
 	{
 		int cx = screenBits.bounds.right / 2;
@@ -251,6 +298,11 @@ void ShimPumpEvents (void)
 		{
 			shimInput.virtualMouse.h = (short)(cx + (int)(px * DEFLECT_HALF));
 			shimInput.virtualMouse.v = (short)(cy + (int)(py * DEFLECT_HALF));
+		}
+		else if (shimInput.mcStickActive)
+		{
+			shimInput.virtualMouse.h = (short)(cx + (int)(shimInput.mcThumbX * DEFLECT_HALF));
+			shimInput.virtualMouse.v = (short)(cy + (int)(shimInput.mcThumbY * DEFLECT_HALF));
 		}
 		else if (touchActive)
 		{
@@ -281,11 +333,13 @@ void ShimPumpEvents (void)
 		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_WEST)) shimInput.bashDown = 1;
 		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_START)) shimInput.padStart = 1;
 	}
-	for (int i = 0; i < tfN; i++)                 /* right-half touch buttons */
+	for (int i = 0; i < tfN; i++)                 /* right-half swipe-mode buttons */
 	{
 		if (tfKind[i] == 1) shimInput.buttonDown = 1;
 		if (tfKind[i] == 2) shimInput.brakeDown = 1;
 	}
+	if (shimInput.mcCatch) shimInput.buttonDown = 1;   /* on-screen action buttons */
+	if (shimInput.mcBrake) shimInput.brakeDown = 1;
 
 	ShimAdvanceTicks();
 	ShimPresentIfDirty();
@@ -328,7 +382,7 @@ void GetKeys (KeyMap theKeys)
 	/* Esc = pause (Tab) — the pause screen then offers to end the game;
 	 * window close = quit (Cmd+Q). On Android the hardware Back button (trapped
 	 * as a key via SDL_HINT_ANDROID_TRAP_BACK_BUTTON) also pauses. */
-	if (ks[SDL_SCANCODE_ESCAPE] || ks[SDL_SCANCODE_AC_BACK])
+	if (ks[SDL_SCANCODE_ESCAPE] || ks[SDL_SCANCODE_AC_BACK] || shimInput.mcPause)
 		setKeyBit(km, kTab, 1);
 	if (shimInput.quitRequested)
 	{

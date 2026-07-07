@@ -63,7 +63,15 @@ typedef struct ShimInput {
 	/* one-shot raw touch-down (any mode), for the pause screen's tap-to-resume /
 	 * tap-to-end; tapX/tapY are normalized 0..1, consumer clears tapFresh */
 	int     tapFresh; float tapX, tapY;
+	/* on-screen touch controls (mobile): pressed states + stick deflection for
+	 * the overlay drawing, and the pause button (mapped to the pause key) */
+	int     mcCatch, mcBrake, mcPause;
+	int     mcStickActive; float mcThumbX, mcThumbY;   /* -1..1 */
 } ShimInput;
+
+/* 1 on a touch device (Android, or --mobile for testing): show the pause button
+ * and, in on-screen mode, the analog stick + action buttons */
+extern int shimMobile;
 extern ShimInput shimInput;
 
 /* per-pad access for multi-seat play (idx 0..3 = connect order) */

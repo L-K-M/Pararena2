@@ -82,7 +82,7 @@ static char *portSettingsPath (void)
 	return path;
 }
 
-void PortSaveSettings (int classicMode)
+void PortSaveSettings (int classicMode, int mobileOnScreen)
 {
 	char *p = portSettingsPath();
 	if (!p)
@@ -90,14 +90,15 @@ void PortSaveSettings (int classicMode)
 	FILE *f = fopen(p, "wb");
 	if (!f)
 		return;
-	int32_t v = classicMode ? 1 : 0;
+	int32_t v[2] = { classicMode ? 1 : 0, mobileOnScreen ? 1 : 0 };
 	fwrite(PORTSET_MAGIC, 1, 8, f);
-	fwrite(&v, 4, 1, f);
+	fwrite(v, 4, 2, f);
 	fclose(f);
 }
 
-/* leaves *classicMode untouched (caller keeps its default) on any failure */
-void PortLoadSettings (int *classicMode)
+/* leaves each *out untouched (caller keeps its default) on any failure; the
+ * second field is optional so older single-field files still load */
+void PortLoadSettings (int *classicMode, int *mobileOnScreen)
 {
 	char *p = portSettingsPath();
 	if (!p)
@@ -107,9 +108,11 @@ void PortLoadSettings (int *classicMode)
 		return;
 	char magic[8];
 	int32_t v = 0;
-	if (fread(magic, 1, 8, f) == 8 && memcmp(magic, PORTSET_MAGIC, 8) == 0 &&
-	    fread(&v, 4, 1, f) == 1)
-		*classicMode = v ? 1 : 0;
+	if (fread(magic, 1, 8, f) == 8 && memcmp(magic, PORTSET_MAGIC, 8) == 0)
+	{
+		if (fread(&v, 4, 1, f) == 1) *classicMode = v ? 1 : 0;
+		if (fread(&v, 4, 1, f) == 1) *mobileOnScreen = v ? 1 : 0;
+	}
 	fclose(f);
 }
 

@@ -110,6 +110,7 @@ endif()
 
 target_include_directories(pararena2 PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/shim"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/win"
     "${GAME_SRC_DIR}")
 

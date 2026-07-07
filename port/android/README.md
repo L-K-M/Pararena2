@@ -34,13 +34,18 @@ for other ABIs.
 
 ## Touch controls
 
-The game's input is a mouse-deflection "skate" vector, mapped to touch as:
+There are two touch schemes, chosen by **Options → TOUCH CONTROLS**:
 
-- **Left half of the screen** — a relative virtual joystick: press anywhere and
-  drag; the drag direction/length is your thrust (release to coast).
-- **Right half** — **upper** = catch / throw, **lower** = brake.
-- **Back button** — pause / resume.
-- **Menus** — tap the top / middle / bottom third to move up / select / down.
+- **ON-SCREEN** (default) — a visible analog stick (bottom-left) you drag to
+  skate, plus visible action buttons bottom-right: **catch / throw** (the ball
+  dot) and **brake** (the bar).
+- **SWIPE** — no visible controls: drag the **left half** of the screen to skate
+  (a relative joystick from wherever you press), tap the **right half** for
+  **catch** (upper) / **brake** (lower).
+
+Either way, an always-visible **pause button** (the ‖ at top-centre) opens the
+pause screen; the hardware **Back button** pauses too. **Menus** are driven by
+taps — top / middle / bottom third = up / select / down.
 
 The pause screen (a dithered Sony Ericsson P800 showing the touch layout) is
 dismissed by touch: **tap the left half to resume, the right half to end the

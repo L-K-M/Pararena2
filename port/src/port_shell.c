@@ -21,6 +21,7 @@
 #else
 #include "pause_screen_img.h"         /* gamepad pause art */
 #endif
+#include "mobile_controls.h"          /* on-screen touch control layout */
 
 void PortInputSetPlayMode (int playing);
 void PortFourRun (int mode, const int personas[4]);   /* port_four.c */
@@ -35,8 +36,11 @@ int portFourDemo = 0;         /* --four-demo N: auto-run one 4P AI game */
  * Off by default; persisted in the port settings file. A future gate for any
  * further gameplay tweaks we want kept out of the classic experience. */
 int classicMode = 0;
-void PortLoadSettings (int *classicMode);   /* port_prefs.c */
-void PortSaveSettings (int classicMode);
+/* Options toggle (mobile): 1 = draw the on-screen analog stick + action buttons,
+ * 0 = the invisible swipe scheme. The pause button is shown either way. */
+int mobileOnScreen = 1;
+void PortLoadSettings (int *classicMode, int *mobileOnScreen);   /* port_prefs.c */
+void PortSaveSettings (int classicMode, int mobileOnScreen);
 
 /* menu model: a dynamic main page (items shown/hidden by the selected mode)
  * plus an options page. */
@@ -44,7 +48,7 @@ enum { PAGE_MAIN, PAGE_OPTIONS };
 enum { MI_START, MI_MODE, MI_GAME, MI_OPPONENT, MI_LEAGUE, MI_SIDE,
        MI_P2, MI_P3, MI_P4, MI_OPTIONS, MI_CONTROLS, MI_QUIT, MI_ITEMS };
 enum { OI_VOLUME, OI_SOUND, OI_CURSOR, OI_ANNOUNCER, OI_RGOALS, OI_RFOULS, OI_RKEY,
-       OI_FULLSCREEN, OI_CLASSIC, OI_BACK, OI_COUNT };
+       OI_FULLSCREEN, OI_CLASSIC, OI_ONSCREEN, OI_BACK, OI_COUNT };
 static int menuPage = PAGE_MAIN;
 static int menuSel = 0;        /* index into the visible-item list on the main page */
 static int optSel = OI_VOLUME;
@@ -108,7 +112,7 @@ void PortShellSyncFromPrefs (void)
 	if (isLeague >= kLittleLeague && isLeague <= kProfessional)
 		selLeague = isLeague;
 	selSide = leftGoalIsPlayers ? 0 : 1;
-	PortLoadSettings(&classicMode);
+	PortLoadSettings(&classicMode, &mobileOnScreen);
 }
 
 /* ------------------------------------------------------------------ */
@@ -224,6 +228,7 @@ static void drawText (short x, short y, const char *s, unsigned char colorIdx)
 #define IDX_YELLOW 1
 #define IDX_BLACK 15
 #define IDX_GRAY 13
+#define IDX_DGRAY 14
 
 /* ---- 8bpp pixel helpers (screen coords): the gamepad-bitmap blit and the
  *      little button glyphs in the controls-card legend ---- */
@@ -241,6 +246,13 @@ static void pxFillCircle (const BitMap *bm, unsigned char idx, int cx, int cy, i
 		for (int dx = -rad; dx <= rad; dx++)
 			if (dx * dx + dy * dy <= rad * rad)
 				pxPlot(bm, idx, cx + dx, cy + dy);
+}
+
+static void pxFillRect (const BitMap *bm, unsigned char idx, int l, int t, int r, int b)
+{
+	for (int y = t; y <= b; y++)
+		for (int x = l; x <= r; x++)
+			pxPlot(bm, idx, x, y);
 }
 
 /* filled circle with a 1px border */
@@ -365,6 +377,55 @@ void DrawPauseScreen (void)
 	shimScreenDirty = 1;
 }
 
+/* Draw the on-screen touch controls over the current game frame (mobile only).
+ * Called every frame from the render hooks after the scene is composited, so
+ * the opaque stick base covers the previous thumb position (no trails). */
+void PortDrawMobileControls (void)
+{
+	GrafPtr wasPort;
+	RGBColor c;
+	const BitMap *scr;
+
+	if (!shimMobile)
+		return;
+	scr = &(((GrafPtr)mainWndo)->portBits);
+	GetPort(&wasPort);
+	SetPort((GrafPtr)mainWndo);
+
+	/* pause button (always): a ring with two bars */
+	pxDisc(scr, MC_PAUSE_CX, MC_PAUSE_CY, MC_PAUSE_R,
+	       shimInput.mcPause ? IDX_YELLOW : IDX_WHITE, IDX_BLACK);
+	pxFillRect(scr, IDX_BLACK, MC_PAUSE_CX - 6, MC_PAUSE_CY - 8, MC_PAUSE_CX - 2, MC_PAUSE_CY + 8);
+	pxFillRect(scr, IDX_BLACK, MC_PAUSE_CX + 2, MC_PAUSE_CY - 8, MC_PAUSE_CX + 6, MC_PAUSE_CY + 8);
+
+	if (mobileOnScreen)
+	{
+		/* analog stick: opaque dark base + white ring, white thumb on top */
+		pxFillCircle(scr, IDX_WHITE, MC_STICK_CX, MC_STICK_CY, MC_STICK_R);
+		pxFillCircle(scr, IDX_DGRAY, MC_STICK_CX, MC_STICK_CY, MC_STICK_R - 3);
+		int travel = MC_STICK_R - MC_STICK_TR;
+		int tx = MC_STICK_CX + (int)(shimInput.mcThumbX * travel);
+		int ty = MC_STICK_CY + (int)(shimInput.mcThumbY * travel);
+		pxDisc(scr, tx, ty, MC_STICK_TR, IDX_WHITE, IDX_BLACK);
+		pxFillCircle(scr, IDX_GRAY, tx, ty, 4);
+
+		/* catch button: white disc, filled dot (the ball); lit when pressed */
+		pxDisc(scr, MC_CATCH_CX, MC_CATCH_CY, MC_CATCH_R,
+		       shimInput.mcCatch ? IDX_YELLOW : IDX_WHITE, IDX_BLACK);
+		pxFillCircle(scr, IDX_BLACK, MC_CATCH_CX, MC_CATCH_CY, 9);
+		pxFillCircle(scr, IDX_WHITE, MC_CATCH_CX - 3, MC_CATCH_CY - 3, 2);
+
+		/* brake button: white disc with a bold bar */
+		pxDisc(scr, MC_BRAKE_CX, MC_BRAKE_CY, MC_BRAKE_R,
+		       shimInput.mcBrake ? IDX_YELLOW : IDX_WHITE, IDX_BLACK);
+		pxFillRect(scr, IDX_BLACK, MC_BRAKE_CX - 12, MC_BRAKE_CY - 4, MC_BRAKE_CX + 12, MC_BRAKE_CY + 4);
+	}
+
+	Index2Color(IDX_BLACK, &c); RGBForeColor(&c);
+	SetPort(wasPort);
+	shimScreenDirty = 1;
+}
+
 int ShimPadRead (int idx, float *x, float *y, int *btn, int *brake, int *bash);  /* shim_input.c */
 
 /* any keyboard/gamepad press that should dismiss the controls screen */
@@ -439,6 +500,7 @@ static void optionValueText (int item, char *buf, size_t bufsz)
 		case OI_RKEY: snprintf(buf, bufsz, "%s", replayOnR ? "ON" : "OFF"); break;
 		case OI_FULLSCREEN: snprintf(buf, bufsz, "%s", PortVideoIsFullscreen() ? "ON" : "OFF"); break;
 		case OI_CLASSIC: snprintf(buf, bufsz, "%s", classicMode ? "ON" : "OFF"); break;
+		case OI_ONSCREEN: snprintf(buf, bufsz, "%s", mobileOnScreen ? "ON-SCREEN" : "SWIPE"); break;
 		default: buf[0] = 0; break;
 	}
 }
@@ -490,7 +552,8 @@ static void drawMenu (void)
 
 	static const char *optLabels[OI_COUNT] = {
 		"VOLUME", "SOUND", "BOARD CURSOR", "ANNOUNCER", "REPLAY GOALS",
-		"REPLAY FOULS", "REPLAY KEY R", "FULLSCREEN", "CLASSIC MODE", "BACK"
+		"REPLAY FOULS", "REPLAY KEY R", "FULLSCREEN", "CLASSIC MODE",
+		"TOUCH CONTROLS", "BACK"
 	};
 	char val[48];
 	if (menuPage == PAGE_MAIN)
@@ -512,7 +575,7 @@ static void drawMenu (void)
 	{
 		for (int i = 0; i < OI_COUNT; i++)
 		{
-			short y = (short)(panel.top + 46 + i * 18);
+			short y = (short)(panel.top + 42 + i * 17);
 			unsigned char col = (i == optSel) ? IDX_YELLOW : IDX_WHITE;
 			drawText((short)(panel.left + 28), y, i == optSel ? ">" : " ", col);
 			drawText((short)(panel.left + 44), y, optLabels[i], col);
@@ -641,7 +704,8 @@ static void menuAdjust (int dir)
 			case OI_RFOULS: replayFouls = !replayFouls; break;
 			case OI_RKEY: replayOnR = !replayOnR; break;
 			case OI_FULLSCREEN: PortVideoSetFullscreen(!PortVideoIsFullscreen()); break;
-			case OI_CLASSIC: classicMode = !classicMode; PortSaveSettings(classicMode); break;
+			case OI_CLASSIC: classicMode = !classicMode; PortSaveSettings(classicMode, mobileOnScreen); break;
+			case OI_ONSCREEN: mobileOnScreen = !mobileOnScreen; PortSaveSettings(classicMode, mobileOnScreen); break;
 			default: break;
 		}
 		replaySomething = replayGoals || replayFouls || replayOnR;

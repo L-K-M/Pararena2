@@ -36,6 +36,7 @@ void PortInputSetPlayMode (int playing);
 void DoOpeningAnnouncer (void);
 void DrawControlsCard (const char *title);   /* menu controls card */
 void DrawPauseScreen (void);                 /* full-screen pause art */
+void PortDrawMobileControls (void);          /* on-screen touch controls overlay */
 extern int classicMode;                      /* Options toggle: hide HUD enhancements */
 
 /* ---------------------------------------------------------------- state */
@@ -1361,6 +1362,7 @@ void HandlePostGraphics (void)
 {
 	HandlePostGraphicsGame();
 	PortSPHeadOverlays();
+	PortDrawMobileControls();
 }
 
 static void render4Scene (void)
@@ -1478,6 +1480,8 @@ static void render4Scene (void)
 			headWas[i] = headIs[i];
 			headWasOn[i] = headOn[i];
 		}
+
+	PortDrawMobileControls();
 }
 
 /* ---------------------------------------------------------------- ball loop */
