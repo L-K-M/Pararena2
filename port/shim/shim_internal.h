@@ -57,12 +57,15 @@ typedef struct ShimInput {
 	int     padConnected;
 	float   padX, padY;          /* -1..1 left stick */
 	int     splitInputs;         /* 4P: keep pads out of the merged kb/mouse state */
-	/* one-shot touch taps for menu navigation (set by the touch handler while
-	 * not in play mode, consumed + cleared by the port's HandleEvent) */
-	int     menuTapUp, menuTapDown, menuTapSelect;
-	/* one-shot raw touch-down (any mode), for the pause screen's tap-to-resume /
-	 * tap-to-end; tapX/tapY are normalized 0..1, consumer clears tapFresh */
+	/* one-shot raw touch-down (any mode): the menu hit-tests it directly against
+	 * its rows, and the pause screen uses it for tap-to-resume / tap-to-end.
+	 * tapX/tapY are normalized 0..1; the consumer clears tapFresh. */
 	int     tapFresh; float tapX, tapY;
+	/* latched Android Back press (SDL_HINT_ANDROID_TRAP_BACK_BUTTON): set on the
+	 * key-down event so a momentary press is never missed by state polling.
+	 * Consumed by the pause key (enter pause) / the pause loops (a fresh press
+	 * ends the game) / the menu (acts like Escape). */
+	int     backEdge;
 	/* on-screen touch controls (mobile): pressed states + stick deflection for
 	 * the overlay drawing, and the pause button (mapped to the pause key) */
 	int     mcCatch, mcBrake, mcPause;

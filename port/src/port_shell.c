@@ -585,7 +585,8 @@ static void drawMenu (void)
 		}
 	}
 	drawText((short)(panel.left + 16), (short)(panel.bottom - 14),
-	         "ARROWS: MOVE  RETURN: SELECT  F11: FULLSCREEN", IDX_GRAY);
+	         shimMobile ? "TAP A ROW TO SELECT   TAP AGAIN TO CHOOSE"
+	                    : "ARROWS: MOVE  RETURN: SELECT  F11: FULLSCREEN", IDX_GRAY);
 
 	Index2Color(IDX_BLACK, &c);
 	RGBForeColor(&c);
@@ -739,6 +740,51 @@ static void menuActivate (void)
 	}
 }
 
+/* Touchscreen menu: hit-test a normalized tap (nx,ny) against the on-screen
+ * rows using the exact geometry drawMenu() lays out. First tap on a row selects
+ * it; a tap on the already-selected row activates it (start / open / cycle) —
+ * so a stray tap only moves the highlight, it can't launch a game. */
+static void menuTapHit (float nx, float ny)
+{
+	int px = (int)(nx * screenWide);
+	int py = (int)(ny * screenHigh);
+	short pLeft   = (short)(screenWide / 2 - 190);
+	short pRight  = (short)(screenWide / 2 + 190);
+	short pTop    = (short)(screenHigh / 2 - 120);
+	short pBottom = (short)(screenHigh / 2 + 120);
+
+	if (px < pLeft || px > pRight || py < pTop || py > pBottom)
+		return;                                /* outside the panel: ignore */
+
+	if (menuPage == PAGE_MAIN)
+	{
+		buildMenuItems();
+		for (int i = 0; i < visCount; i++)
+		{
+			int y = pTop + 48 + i * 19;
+			if (py >= y - 16 && py <= y + 3)
+			{
+				if (menuSel == i) menuActivate();
+				else { menuSel = i; menuDirty = 1; }
+				return;
+			}
+		}
+	}
+	else
+	{
+		for (int i = 0; i < OI_COUNT; i++)
+		{
+			int y = pTop + 42 + i * 17;
+			if (py >= y - 14 && py <= y + 3)
+			{
+				if (optSel == i) menuActivate();
+				else { optSel = i; menuDirty = 1; }
+				return;
+			}
+		}
+	}
+}
+
 void HandleEvent (void)
 {
 	ShimPumpEvents();
@@ -762,11 +808,18 @@ void HandleEvent (void)
 		DrawPauseScreen();
 		ShimForcePresent();
 		shimInput.tapFresh = 0;                  /* ignore any tap still pending */
+		shimInput.backEdge = 0;                  /* the Back press that opened this is spent */
 
 		for (;;)
 		{
 			ShimPumpEvents();
 			if (shimInput.quitRequested) { quitting = TRUE; pausing = FALSE; primaryMode = kIdleMode; break; }
+			if (shimInput.backEdge)             /* Android: a second Back press ends the game */
+			{
+				shimInput.backEdge = 0;
+				pausing = FALSE; primaryMode = kIdleMode;
+				break;
+			}
 			if (shimInput.tapFresh)              /* touch: tap left = resume, right = end */
 			{
 				int right = shimInput.tapX >= 0.5f;
@@ -776,7 +829,7 @@ void HandleEvent (void)
 				break;
 			}
 			const bool *ks = SDL_GetKeyboardState(NULL);
-			int resumeHeld = ks[SDL_SCANCODE_TAB] || ks[SDL_SCANCODE_ESCAPE] || ks[SDL_SCANCODE_AC_BACK] || shimInput.padStart;
+			int resumeHeld = ks[SDL_SCANCODE_TAB] || ks[SDL_SCANCODE_ESCAPE] || shimInput.padStart;
 			int endHeld    = ks[SDL_SCANCODE_E] || ShimAnyPadButton(SDL_GAMEPAD_BUTTON_BACK);
 			if (armed && endHeld)    { pausing = FALSE; primaryMode = kIdleMode; break; }  /* end game */
 			if (armed && resumeHeld)
@@ -788,7 +841,7 @@ void HandleEvent (void)
 				{
 					ShimPumpEvents();
 					ks = SDL_GetKeyboardState(NULL);
-					resumeHeld = ks[SDL_SCANCODE_TAB] || ks[SDL_SCANCODE_ESCAPE] || ks[SDL_SCANCODE_AC_BACK] || shimInput.padStart;
+					resumeHeld = ks[SDL_SCANCODE_TAB] || ks[SDL_SCANCODE_ESCAPE] || shimInput.padStart;
 					SDL_Delay(10);
 				}
 				pausing = FALSE;                                                          /* resume */
@@ -865,10 +918,27 @@ void HandleEvent (void)
 		prevU = u; prevD = d; prevL = l; prevR = r; prevS = s;
 	}
 
-	/* touchscreen menu navigation: tap top/bottom to move, middle to select */
-	if (shimInput.menuTapUp)     { menuMoveSel(-1); shimInput.menuTapUp = 0; }
-	if (shimInput.menuTapDown)   { menuMoveSel(1);  shimInput.menuTapDown = 0; }
-	if (shimInput.menuTapSelect) { menuActivate();  shimInput.menuTapSelect = 0; }
+	/* touchscreen menu navigation: tap a row to select it, tap it again to use it */
+	if (shimInput.tapFresh)
+	{
+		menuTapHit(shimInput.tapX, shimInput.tapY);
+		shimInput.tapFresh = 0;
+	}
+
+	/* Android Back in the menu behaves like Esc: leave the options page, else
+	 * jump the highlight to QUIT. Always consumed so it can't leak into play. */
+	if (shimInput.backEdge)
+	{
+		shimInput.backEdge = 0;
+		if (!splashIsUp)
+		{
+			if (menuPage == PAGE_OPTIONS)
+				menuPage = PAGE_MAIN;
+			else
+				menuSel = visCount - 1;        /* QUIT is always last */
+			menuDirty = 1;
+		}
+	}
 
 	if (primaryMode == kPlayMode)
 	{

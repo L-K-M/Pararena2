@@ -1614,12 +1614,20 @@ static void check4AbortiveInput (void)
 		DrawPauseScreen();
 		ShimForcePresent();
 		shimInput.tapFresh = 0;                      /* ignore any pending tap */
+		shimInput.backEdge = 0;                      /* the Back press that opened this is spent */
 		for (;;)
 		{
 			GetKeys(theKeyMap);
 			if (shimInput.quitRequested)
 			{
 				quitting = TRUE;
+				fourDone = 1;
+				fourWinner = -1;
+				break;
+			}
+			if (shimInput.backEdge)                  /* Android: a second Back press ends the game */
+			{
+				shimInput.backEdge = 0;
 				fourDone = 1;
 				fourWinner = -1;
 				break;

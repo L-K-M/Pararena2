@@ -20,10 +20,13 @@
 #define MC_BRAKE_CY   316
 #define MC_BRAKE_R    30
 
-/* pause button (top-centre, clear of the corner scoreboards/chips) */
+/* pause button (top-centre, clear of the corner scoreboards/chips). Kept well
+ * below the top edge: on Android the letterboxed 4:3 image fills the screen
+ * top-to-bottom, so the very top row lands under the status bar / top-edge
+ * system-gesture strip, where a button is hidden or swallowed by the OS. */
 #define MC_PAUSE_CX   320
-#define MC_PAUSE_CY   24
-#define MC_PAUSE_R    20
+#define MC_PAUSE_CY   56
+#define MC_PAUSE_R    22
 
 /* true if normalized touch (nx,ny in 0..1) is within radius r of (cx,cy) */
 #define MC_HIT(nx, ny, cx, cy, r) \

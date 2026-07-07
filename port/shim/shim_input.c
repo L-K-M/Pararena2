@@ -36,9 +36,9 @@ static Uint64 lastPresentNS;
 /* ---- touchscreen (Android) virtual controls ----
  * Play mode: the left half is a relative "skate" joystick (drag from wherever
  * the finger lands), the right half is CATCH/THROW (upper) and BRAKE (lower).
- * Menu mode: a tap in the top / middle / bottom third means up / select / down.
- * SDL's touch->mouse synthesis is disabled (a hint in port_main.c) so this is
- * the sole owner of the deflection while touching. */
+ * Menu mode: the raw tap is recorded and HandleEvent hit-tests it against the
+ * on-screen menu rows. SDL's touch->mouse synthesis is disabled (a hint in
+ * port_main.c) so this is the sole owner of the deflection while touching. */
 #define TOUCH_MAX 8
 #define TOUCH_RADIUS 0.16f            /* normalized drag distance for full tilt */
 static SDL_FingerID tfId[TOUCH_MAX];  /* button fingers (right half) */
@@ -80,16 +80,12 @@ void PortInputSetPlayMode (int playing)
 
 static void touchDown (SDL_FingerID id, float x, float y)
 {
-	/* record the raw tap for the pause screen (any mode) */
+	/* record the raw tap (any mode): the menu hit-tests it against its rows and
+	 * the pause screen uses it for tap-to-resume / tap-to-end */
 	shimInput.tapFresh = 1; shimInput.tapX = x; shimInput.tapY = y;
 
 	if (!inPlayMode)
-	{
-		if (y < 0.34f)      shimInput.menuTapUp = 1;
-		else if (y > 0.66f) shimInput.menuTapDown = 1;
-		else                shimInput.menuTapSelect = 1;
-		return;
-	}
+		return;                                /* menu taps handled in HandleEvent */
 
 	/* during play, the pause button and the on-screen pad are handled by polling,
 	 * not the swipe machinery — keep their fingers out of it */
@@ -195,6 +191,10 @@ static void handleEvent (const SDL_Event *ev)
 			if (ev->key.key == SDLK_F11 ||
 			    (ev->key.key == SDLK_RETURN && (ev->key.mod & SDL_KMOD_ALT)))
 				PortVideoSetFullscreen(!PortVideoIsFullscreen());
+			/* Android Back (trapped as a key): latch it here so a momentary
+			 * press can't slip between GetKeys' keyboard-state snapshots */
+			if (ev->key.key == SDLK_AC_BACK || ev->key.scancode == SDL_SCANCODE_AC_BACK)
+				shimInput.backEdge = 1;
 			break;
 		case SDL_EVENT_WINDOW_EXPOSED:
 		case SDL_EVENT_WINDOW_RESTORED:
@@ -253,10 +253,12 @@ void ShimPumpEvents (void)
 	int touchActive = moveOn && (moveDefX > 0.06f || moveDefX < -0.06f ||
 	                             moveDefY > 0.06f || moveDefY < -0.06f);
 
-	/* mobile on-screen controls + pause button, polled from all active fingers */
+	/* mobile on-screen controls + pause button, polled from all active fingers.
+	 * Only while actually playing: the widgets are drawn (and meaningful) only
+	 * then, and this keeps menu taps from registering as catch/brake/pause. */
 	shimInput.mcCatch = shimInput.mcBrake = shimInput.mcPause = 0;
 	shimInput.mcStickActive = 0;
-	if (shimMobile)
+	if (shimMobile && inPlayMode)
 	{
 		float mdx = 0, mdy = 0; int stick = 0, ndev = 0;
 		SDL_TouchID *devs = SDL_GetTouchDevices(&ndev);
@@ -380,9 +382,11 @@ void GetKeys (KeyMap theKeys)
 			setKeyBit(km, kR, 1);
 	}
 	/* Esc = pause (Tab) — the pause screen then offers to end the game;
-	 * window close = quit (Cmd+Q). On Android the hardware Back button (trapped
-	 * as a key via SDL_HINT_ANDROID_TRAP_BACK_BUTTON) also pauses. */
-	if (ks[SDL_SCANCODE_ESCAPE] || ks[SDL_SCANCODE_AC_BACK] || shimInput.mcPause)
+	 * window close = quit (Cmd+Q). On Android the hardware Back button (latched
+	 * from its key event) and the on-screen pause button pause too. backEdge
+	 * stays latched until a pause loop / the menu consumes it, so the press is
+	 * never lost between snapshots. */
+	if (ks[SDL_SCANCODE_ESCAPE] || shimInput.backEdge || shimInput.mcPause)
 		setKeyBit(km, kTab, 1);
 	if (shimInput.quitRequested)
 	{

@@ -43,13 +43,16 @@ There are two touch schemes, chosen by **Options → TOUCH CONTROLS**:
   (a relative joystick from wherever you press), tap the **right half** for
   **catch** (upper) / **brake** (lower).
 
-Either way, an always-visible **pause button** (the ‖ at top-centre) opens the
-pause screen; the hardware **Back button** pauses too. **Menus** are driven by
-taps — top / middle / bottom third = up / select / down.
+Either way, an always-visible **pause button** (the ‖ near the top-centre, held
+clear of the status-bar strip) opens the pause screen. The hardware **Back**
+button/gesture pauses too; pressing **Back again while paused returns to the
+main menu**. **Menus** are driven by direct taps: **tap a row to highlight it,
+tap it again to choose it** (start the game, open a submenu, or cycle a value);
+Back leaves a submenu / jumps the highlight to QUIT.
 
 The pause screen (a dithered Sony Ericsson P800 showing the touch layout) is
 dismissed by touch: **tap the left half to resume, the right half to end the
-game** (Back also resumes).
+game** (Back also ends it, returning to the menu).
 
 A connected gamepad (Bluetooth or USB) also works everywhere and adds *bash*
 (West button), which touch doesn't expose yet.
