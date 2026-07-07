@@ -85,12 +85,16 @@ setting persists across launches.
 | Crouch / catch / throw | left mouse button, or X | South (A) |
 | Brake | Space | East (B) or right trigger |
 | Bash | B, N or M | West (X) |
-| Pause / resume | Tab | Start |
+| Pause / resume | Esc or Tab | Start |
 | Instant replay | R | North (Y) |
 | Sound on/off | S | — |
-| End game | Esc (or Ctrl+E) | — |
+| End game | E from the pause screen (or Ctrl+E) | Back, from the pause screen |
 | Quit | Ctrl+Q / close window | — |
 | Fullscreen | F11 or Alt+Enter | — |
+
+Pausing (Esc / Tab / Start) works the same in every mode: it brings up a
+controls card that you resume from (Esc / Tab / Start) or end the game from
+(E / Back).
 
 The original controls were mouse-only: pointer deflection from screen
 center is the thrust vector (the game warps the pointer back each frame).

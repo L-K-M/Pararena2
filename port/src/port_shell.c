@@ -653,24 +653,55 @@ void HandleEvent (void)
 		return;
 	}
 
-	/* paused mid-game: draw a notice, wait for Tab (or pad Start) to resume.
-	 * The game sets pausing while Tab is still held down, so the resume key
-	 * must be seen released once before a new press counts — otherwise the
-	 * pause instantly bounces back into play. */
+	/* paused mid-game (1v1): show the same controls-card pause screen the
+	 * four-player modes use, and resume on Esc / Tab / pad Start or end the game
+	 * with E / pad Back. The game sets pausing while the pause key is still held,
+	 * so wait for a release ("armed") before a fresh press counts — otherwise the
+	 * entry press would instantly resume. Ending a game is just primaryMode =
+	 * kIdleMode (what the original's Cmd+E abort does for a standard game). */
 	if (primaryMode == kPlayMode && pausing)
 	{
-		static int resumeArmed;
-		const bool *ks = SDL_GetKeyboardState(NULL);
-		int pauseKeyHeld = ks[SDL_SCANCODE_TAB] || shimInput.padStart;
-		drawText((short)(screenWide / 2 - 100), 20, "PAUSED - PRESS TAB TO RESUME", IDX_YELLOW);
-		if (!pauseKeyHeld)
-			resumeArmed = 1;
-		else if (resumeArmed)
+		GrafPtr wp;
+		RGBColor blackC;
+		const char *l2 = "ESC / TAB = RESUME     E = END GAME";
+		int armed = 0;
+
+		DrawControlsCard("PAUSED");
+		GetPort(&wp);
+		SetPort((GrafPtr)mainWndo);
+		drawText((short)(screenWide / 2 - (short)(strlen(l2) * 4)),
+		         (short)(screenHigh / 2 + 178), l2, IDX_BLACK);
+		Index2Color(IDX_BLACK, &blackC);
+		RGBForeColor(&blackC);
+		SetPort(wp);
+		ShimForcePresent();
+
+		for (;;)
 		{
-			resumeArmed = 0;
-			pausing = FALSE;
+			ShimPumpEvents();
+			if (shimInput.quitRequested) { quitting = TRUE; pausing = FALSE; primaryMode = kIdleMode; break; }
+			const bool *ks = SDL_GetKeyboardState(NULL);
+			int resumeHeld = ks[SDL_SCANCODE_TAB] || ks[SDL_SCANCODE_ESCAPE] || shimInput.padStart;
+			int endHeld    = ks[SDL_SCANCODE_E] || ShimAnyPadButton(SDL_GAMEPAD_BUTTON_BACK);
+			if (armed && endHeld)    { pausing = FALSE; primaryMode = kIdleMode; break; }  /* end game */
+			if (armed && resumeHeld)
+			{
+				/* wait for the resume key to release before handing control back,
+				 * or RunStandardGame's CheckAbortiveInput sees it still down and
+				 * instantly re-pauses. */
+				while (resumeHeld && !shimInput.quitRequested)
+				{
+					ShimPumpEvents();
+					ks = SDL_GetKeyboardState(NULL);
+					resumeHeld = ks[SDL_SCANCODE_TAB] || ks[SDL_SCANCODE_ESCAPE] || shimInput.padStart;
+					SDL_Delay(10);
+				}
+				pausing = FALSE;                                                          /* resume */
+				break;
+			}
+			if (!resumeHeld && !endHeld) armed = 1;
+			SDL_Delay(10);
 		}
-		SDL_Delay(10);
 		return;
 	}
 
