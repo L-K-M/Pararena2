@@ -97,7 +97,10 @@ the menu's CONTROLS row wedges the app on the controls card forever — taps
 is killing the app. **Fix**: dismiss on a fresh tap and on Back; while here,
 show touch-appropriate content on mobile (the card currently shows a gamepad
 bitmap and a keyboard legend to phone users).
-**→ Resolution:** _pending_
+**→ Resolution:** **implemented** (tap/Back dismissal + touch prompt) —
+branch `fix/touch-modal-softlocks`,
+[PR #8](https://github.com/L-K-M/Pararena2/pull/8). Touch-specific card
+*content* left as follow-up.
 
 ### A3. ⚠ The tournament alert overlay can't be answered by touch
 
@@ -107,7 +110,8 @@ starting a TOURNAMENT against an already-beaten persona pops the
 "tournament not available" alert (ID 1011) that **cannot be answered on a
 touch-only device**: another soft-lock. **Fix**: hit-test taps against the two
 answer lines (or top/bottom halves), and treat Back as "no".
-**→ Resolution:** _pending_
+**→ Resolution:** **implemented** — branch `fix/touch-modal-softlocks`,
+[PR #8](https://github.com/L-K-M/Pararena2/pull/8) (covers A2 and A3).
 
 ### A4. ⚠ Pause screen: tapping where the pause button sits can end the game
 
@@ -154,7 +158,10 @@ Android:
 (`pausing = TRUE; timePaused = Ticks`, exactly what `DoPausing` does), and
 save prefs; on foreground — advance the tick epoch by the gap so `Ticks`
 stays continuous.
-**→ Resolution:** _pending_
+**→ Resolution:** **implemented** (event-watch handler: auto-pause both 1v1
+and 4P paths, prefs+settings save on background/terminate, tick-epoch
+rebase, plus tap/pause-latch hygiene on play-mode transitions) — branch
+`fix/android-lifecycle`, [PR #9](https://github.com/L-K-M/Pararena2/pull/9).
 
 ### A6. Navigation bar stays visible — immersive mode never engages
 
@@ -167,7 +174,8 @@ window without it: `PortVideoOpen(640, 480, fullscreen)` gets
 CLI argument (`port_main.c:46-52,126`), which SDLActivity never passes. Result:
 the system bars shrink the (already letterboxed) play surface and sit right
 where thumbs rest. **Fix**: default `fullscreen = 1` under `__ANDROID__`.
-**→ Resolution:** _pending_
+**→ Resolution:** **implemented** — branch `fix/android-immersive`,
+[PR #10](https://github.com/L-K-M/Pararena2/pull/10).
 
 ### A7. Touch exposes no BASH — a core move is unreachable on a phone
 
@@ -177,7 +185,12 @@ tackle, a third of the game's vocabulary — has no touch mapping at all**
 yet"). FFA against Otto without bash is basically unarmed. **Fix**: add a bash
 button to the on-screen cluster (the bottom-right has room for the classic
 two-button diamond).
-**→ Resolution:** _pending_
+**→ Resolution:** **implemented** — branch `feat/touch-bash-button`,
+[PR #11](https://github.com/L-K-M/Pararena2/pull/11). Bonus finding fixed in
+the same PR: the 4P path (`apply4HumanForces`) read keyboard/mouse directly,
+so **P1's touch catch/brake were dead in 2v2/FFA games** — the merged shim
+button state is now folded into seat 1 (pads still excluded in split-input
+mode). The on-screen pause art doesn't show the new button yet (follow-up).
 
 ### A8. The announcer intro is ~10 s, unskippable, and blocks input
 
@@ -186,7 +199,10 @@ with `Delay()` between them — ≈ 9.7 s of dead time before *every* game (also
 in 4P). There's an ANNOUNCER toggle buried in Options, but no tap/key/button
 skip. On a phone this reads as a hang. **Fix**: end the intro early on any
 tap/click/button; keep the toggle.
-**→ Resolution:** _pending_
+**→ Resolution:** **implemented** (tap / Back / click / Return / Space / Esc /
+pad face or Start skips; a new `ShimStopSoundID` cuts the clip without
+touching the crowd loop) — branch `feat/announcer-skip`,
+[PR #12](https://github.com/L-K-M/Pararena2/pull/12).
 
 ### A9. Mobile UX papercuts (smaller, still worth fixing)
 
@@ -220,12 +236,19 @@ tap/click/button; keep the toggle.
   bug.)
 - **B2. `GetHandleSize()` still returns 0** (`shim_res.c:83`) — carried over
   from round 1; a booby trap for future handle-sizing code.
+  **→ Resolution:** **implemented** (all handles — `NewHandle`, `NewRgn`,
+  `GetPicture` — are size-tracked via a shared two-slot block) — branch
+  `fix/handle-size`, [PR #13](https://github.com/L-K-M/Pararena2/pull/13).
 - **B3. `CopyBits` still ignores `maskRgn`** (`shim_qd.c:58-61`) — latent;
   `Replay.c` swaps visRgns expecting clipping. Harmless today.
 - **B4. Supply chain still unpinned**: the SDL3 tarball is fetched without
   `URL_HASH` (`port/CMakeLists.txt:16-17`) and `android/fetch-deps.sh`
   downloads it with no checksum either — neither build is reproducible, and a
   compromised mirror would go unnoticed.
+  **→ Resolution:** **implemented** (SHA-256 pinned in both fetch paths,
+  trust-on-first-use from the official libsdl.org download; verified with a
+  fresh FetchContent configure) — branch `fix/pin-sdl-fetch`,
+  [PR #14](https://github.com/L-K-M/Pararena2/pull/14).
 - **B5. The scoreboard name is still the constant "PLAYER"**
   (`port_univ.c:89-93`); all stats accrue to profile 1. (Round-1 leftover.)
 - **B6. Stale `keyPressedOnce` state across mode transitions** is handled for
@@ -392,14 +415,20 @@ Ordered to minimize cross-branch conflicts; each lands on its own branch.
 | # | Branch | Covers | Files | Resolution |
 |---|---|---|---|---|
 | 1 | ~~`fix/touch-letterbox-mapping`~~ | A1 | — | superseded: landed on main via `2cc7fe7` before this plan executed |
-| 2 | `fix/touch-modal-softlocks` | A2, A3 | port_shell.c, shim_os.c | _pending_ |
+| 2 | `fix/touch-modal-softlocks` | A2, A3 | port_shell.c, shim_os.c | ✅ [PR #8](https://github.com/L-K-M/Pararena2/pull/8) |
 | 3 | ~~`fix/pause-tap-safety`~~ | A4 | — | superseded: landed on main via `2cc7fe7` |
-| 4 | `fix/android-lifecycle` | A5 (+ input-latch hygiene on mode transitions) | shim_input.c, shim_os.c, shim_internal.h | _pending_ |
-| 5 | `fix/android-immersive` | A6 | port_main.c | _pending_ |
-| 6 | `feat/touch-bash-button` | A7 | mobile_controls.h, shim_input.c, port_shell.c | _pending_ |
-| 7 | `feat/announcer-skip` | A8 | port_shell.c | _pending_ |
-| 8 | `fix/handle-size` | B2 | shim_res.c | _pending_ |
-| 9 | `fix/pin-sdl-fetch` | B4 | CMakeLists.txt, fetch-deps.sh | _pending_ |
+| 4 | `fix/android-lifecycle` | A5 (+ input-latch hygiene on mode transitions) | port_shell.c, port_init.c, shim_input.c, shim_os.c, shim_internal.h | ✅ [PR #9](https://github.com/L-K-M/Pararena2/pull/9) |
+| 5 | `fix/android-immersive` | A6 | port_main.c | ✅ [PR #10](https://github.com/L-K-M/Pararena2/pull/10) |
+| 6 | `feat/touch-bash-button` | A7 (+ dead 4P touch buttons for P1) | mobile_controls.h, shim_input.c, port_shell.c, port_four.c | ✅ [PR #11](https://github.com/L-K-M/Pararena2/pull/11) |
+| 7 | `feat/announcer-skip` | A8 | port_shell.c, shim_sound.c | ✅ [PR #12](https://github.com/L-K-M/Pararena2/pull/12) |
+| 8 | `fix/handle-size` | B2 | shim_res.c, shim_qd.c | ✅ [PR #13](https://github.com/L-K-M/Pararena2/pull/13) |
+| 9 | `fix/pin-sdl-fetch` | B4 | CMakeLists.txt, fetch-deps.sh | ✅ [PR #14](https://github.com/L-K-M/Pararena2/pull/14) |
+
+All nine branches were cut from the same main commit and touch disjoint
+regions where possible; the known overlap points are `shim_internal.h`
+(each adds declarations in different sections — merges cleanly) and
+`port_shell.c` / `shim_input.c` (different functions per branch). Merge
+PRs in table order to keep any conflicts trivial.
 
 Left for future rounds (lower confidence or larger scope): B1 forfeit-stats
 parity, A9 papercuts batch, §6 window-layer controls, foul pips, result card,
