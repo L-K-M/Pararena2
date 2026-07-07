@@ -90,6 +90,7 @@ int ShimPadRead (int idx, float *x, float *y, int *btn, int *brake, int *bash);
 /* ---------------- sound ---------------- */
 void ShimSoundInit (void);
 void ShimSoundQuit (void);
+void ShimStopSoundID (short soundID);   /* stop the voice playing this ID */
 
 /* ---------------- shell hooks ---------------- */
 void PortShellHandleEvent (void);   /* the port's idle-mode UI (HandleEvent) */

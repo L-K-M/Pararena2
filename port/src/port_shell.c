@@ -989,14 +989,30 @@ Boolean DoTeamsSetUp (void)
 	return TRUE;                  /* teams are chosen in the port menu */
 }
 
+/* any input that should skip the announcer intro: Return/Space/Esc, a mouse
+ * click / merged button, or a pad face/start button (read directly so it
+ * works in split-input 4P games too) */
+static int announcerSkipHeld (void)
+{
+	const bool *ks = SDL_GetKeyboardState(NULL);
+	if (ks[SDL_SCANCODE_RETURN] || ks[SDL_SCANCODE_KP_ENTER] ||
+	    ks[SDL_SCANCODE_SPACE]  || ks[SDL_SCANCODE_ESCAPE]) return 1;
+	if (shimInput.buttonDown || shimInput.brakeDown || shimInput.bashDown) return 1;
+	if (ShimAnyPadButton(SDL_GAMEPAD_BUTTON_SOUTH) ||
+	    ShimAnyPadButton(SDL_GAMEPAD_BUTTON_START)) return 1;
+	return 0;
+}
+
 void DoOpeningAnnouncer (void)
 {
-	/* simplified from IdleRoutines.c: announcer art + the six voice clips */
+	/* simplified from IdleRoutines.c: announcer art + the six voice clips.
+	 * The full intro is ~10 s; any tap, click, button, or key skips the rest
+	 * (unskippable, it reads as a hang — especially on a phone). */
 	static const short clipIDs[6] = { 100, 101, 102, 103, 104, 105 };
 	static const short clipTicks[6] = { 90, 90, 90, 100, 90, 120 };
 	GrafPtr wasPort;
 	PicHandle pict;
-	long dummy;
+	int skipped = 0, armed = 0;
 
 	GetPort(&wasPort);
 	SetPort((GrafPtr)mainWndo);
@@ -1007,14 +1023,36 @@ void DoOpeningAnnouncer (void)
 		DrawPicture(pict, &dest);
 		ReleaseResource((Handle)pict);
 	}
-	for (int i = 0; i < 6; i++)
+	shimInput.tapFresh = 0;               /* spend the input that started the game */
+	shimInput.backEdge = 0;
+	for (int i = 0; i < 6 && !skipped; i++)
 	{
-		if (soundOn && ShimFindAsset(SHIM_FOURCC('S','N','D',' '), clipIDs[i]))
+		if (!soundOn || !ShimFindAsset(SHIM_FOURCC('S','N','D',' '), clipIDs[i]))
+			continue;
 		{
 			extern void SMSSTART (short);
 			SMSSTART(clipIDs[i]);
-			Delay(clipTicks[i], &dummy);
 		}
+		long until = Ticks + clipTicks[i];
+		while (Ticks < until && !skipped)
+		{
+			ShimPumpEvents();
+			ShimTickSleep();
+			if (shimInput.quitRequested)
+				skipped = 1;
+			else if (shimInput.tapFresh || shimInput.backEdge)
+			{
+				shimInput.tapFresh = 0;
+				shimInput.backEdge = 0;
+				skipped = 1;
+			}
+			else if (!announcerSkipHeld())
+				armed = 1;                /* wait for a release, then a fresh press */
+			else if (armed)
+				skipped = 1;
+		}
+		if (skipped)
+			ShimStopSoundID(clipIDs[i]); /* cut the clip; crowd loop is untouched */
 	}
 	/* restore what the announcer covered */
 	CopyBits(&((GrafPtr)offCWorkPtr)->portBits, &(((GrafPtr)mainWndo)->portBits),

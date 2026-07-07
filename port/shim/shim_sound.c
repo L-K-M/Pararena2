@@ -213,6 +213,18 @@ void SMSSTOPCHAN (short channel)
 	SDL_UnlockMutex(lock);
 }
 
+/* port helper: stop whichever voice is playing this sound ID, leaving the
+ * other channels (e.g. the pinned crowd loop) alone — used by the announcer
+ * skip, where the channel that won arbitration isn't known to the caller */
+void ShimStopSoundID (short soundID)
+{
+	SDL_LockMutex(lock);
+	for (int c = 0; c < NUM_CHANNELS; c++)
+		if (voices[c].active && voices[c].soundID == soundID)
+			voices[c].active = 0;
+	SDL_UnlockMutex(lock);
+}
+
 /* declared in SMS.h but never called by the game — link stubs */
 void SMSSTARTLO (short soundID) { SMSSTART(soundID); }
 void SMSSTARTMID (short soundID) { SMSSTART(soundID); }
