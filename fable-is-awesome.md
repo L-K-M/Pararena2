@@ -31,6 +31,14 @@ bug, compounded by several touch-only dead ends. Details below.
 
 ## 1. Android / touch — the headline problems
 
+> **Mid-review update:** while this review was being written, commit
+> `2cc7fe7` ("Fix Android touch: letterbox-correct coordinates, menu, pause,
+> resume, adaptive pause art", a parallel session) landed on main and fixes
+> **A1** and **A4** below, plus the per-scheme pause art from A9. That commit
+> was reviewed here line-by-line and its approach is correct (it is the same
+> fix §A1 prescribes). The findings are kept for the record with their
+> resolutions updated; everything else in this section remains open.
+
 ### A1. ⚠⚠ Touch hit-testing ignores the letterbox — the default control scheme is broken on every non-4:3 screen
 
 The game renders 640×480 through
@@ -76,7 +84,9 @@ verified *not* to clamp — bar touches map outside 0..640, which the half-scree
 tests should tolerate). Feed logical coordinates to `MC_HIT`, `menuTapHit`,
 the tap-left/right checks, and the swipe split. This is the single highest
 -value fix in the port.
-**→ Resolution:** _pending_
+**→ Resolution:** **fixed on main by `2cc7fe7`** (parallel session) —
+`PortVideoTouchToLogical()` + `touchToContent()` convert at every touch
+ingress (event and polled paths). Verified correct in this review.
 
 ### A2. ⚠ CONTROLS screen soft-locks a touch-only device
 
@@ -113,7 +123,12 @@ button's position as *resume*, and keep tap-right = end for the rest (it's
 what the pause art documents). A stale-tap leak belongs to the same family:
 a tap that lands during play (missing all controls) stays latched in
 `tapFresh` and fires into the menu after the game ends.
-**→ Resolution:** _pending_
+**→ Resolution:** **fixed on main by `2cc7fe7`** — the left/right split is
+gone (tap anywhere resumes, Back ends the game), the pause-button tap is
+latched on finger-down, and the latches are cleared on pause entry/exit.
+The stale-tap leak into the menu is defused by the same commit's
+tap-to-arm menu logic (a stray tap can only move the highlight); input-state
+clearing on play-mode transitions is folded into the lifecycle branch below.
 
 ### A5. ⚠ No app-lifecycle handling: clock jumps and prefs that never save
 
@@ -175,9 +190,9 @@ tap/click/button; keep the toggle.
 
 ### A9. Mobile UX papercuts (smaller, still worth fixing)
 
-- The **pause art documents only the SWIPE scheme** ("Drag the LEFT half …")
-  even when ON-SCREEN (the default) is active — first-run users are taught
-  controls they don't have. The controls card, conversely, never shows touch.
+- ~~The **pause art documents only the SWIPE scheme**~~ — fixed by `2cc7fe7`
+  (per-scheme P800 art). Still open: the controls card never shows touch
+  content — phone users get a gamepad bitmap and a keyboard legend.
 - Menu rows are ~19 logical px tall (~7 mm on a typical phone) — below the
   ~48 dp Android guidance; value rows only cycle *forward* on tap; two-tap
   activation ("tap to select, tap again to choose") is written on-screen but
@@ -376,10 +391,10 @@ Ordered to minimize cross-branch conflicts; each lands on its own branch.
 
 | # | Branch | Covers | Files | Resolution |
 |---|---|---|---|---|
-| 1 | `fix/touch-letterbox-mapping` | A1 (+ desktop `--mobile`) | shim_input.c, port_video.c, shim_internal.h, mobile_controls.h | _pending_ |
+| 1 | ~~`fix/touch-letterbox-mapping`~~ | A1 | — | superseded: landed on main via `2cc7fe7` before this plan executed |
 | 2 | `fix/touch-modal-softlocks` | A2, A3 | port_shell.c, shim_os.c | _pending_ |
-| 3 | `fix/pause-tap-safety` | A4 (+ stale-tap leak) | port_shell.c, port_four.c | _pending_ |
-| 4 | `fix/android-lifecycle` | A5 | shim_input.c, shim_os.c, shim_internal.h | _pending_ |
+| 3 | ~~`fix/pause-tap-safety`~~ | A4 | — | superseded: landed on main via `2cc7fe7` |
+| 4 | `fix/android-lifecycle` | A5 (+ input-latch hygiene on mode transitions) | shim_input.c, shim_os.c, shim_internal.h | _pending_ |
 | 5 | `fix/android-immersive` | A6 | port_main.c | _pending_ |
 | 6 | `feat/touch-bash-button` | A7 | mobile_controls.h, shim_input.c, port_shell.c | _pending_ |
 | 7 | `feat/announcer-skip` | A8 | port_shell.c | _pending_ |
