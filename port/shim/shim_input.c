@@ -76,6 +76,15 @@ void PortInputSetPlayMode (int playing)
 	shimInput.virtualMouse.v = screenBits.bounds.bottom / 2;
 	keyAxisX = keyAxisY = 0;
 	moveOn = 0; tfN = 0; moveDefX = moveDefY = 0;
+	/* a tap or pause latch from the mode we're leaving must not fire into the
+	 * one we're entering (e.g. the last in-game tap clicking a menu row) */
+	shimInput.tapFresh = 0;
+	shimInput.pauseTap = 0;
+}
+
+int ShimInPlayMode (void)
+{
+	return inPlayMode;
 }
 
 /* SDL reports finger coords normalized to the whole window; on a phone the 4:3

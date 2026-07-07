@@ -119,6 +119,60 @@ void PortShellSyncFromPrefs (void)
 }
 
 /* ------------------------------------------------------------------ */
+/* App lifecycle (Android). SDL delivers these on the OS's activity thread
+ * through the event watch — by the time the normal event pump would see
+ * them, the main thread is already blocked by SDL_ANDROID_BLOCK_ON_PAUSE.
+ * Going to the background: auto-pause a live game (exactly what DoPausing
+ * does, so the player returns to the pause screen, not a live goal against
+ * them), persist prefs + settings (on Android the process is killed without
+ * ever running the desktop quit path, so this is the only save point), and
+ * freeze the tick clock so the game clock doesn't fast-forward by the whole
+ * background stay. The main thread is quiescent (blocked or about to block)
+ * during the save; these globals are plain flags/structs it only rereads
+ * after resume. */
+
+void DumpTheDefaults (void);                  /* Sources/Main.c */
+
+static void portSaveEverything (void)
+{
+	DumpTheDefaults();
+	PortSaveSettings(classicMode, mobileOnScreen);
+}
+
+static bool SDLCALL portAppLifeWatch (void *userdata, SDL_Event *ev)
+{
+	(void)userdata;
+	switch (ev->type)
+	{
+		case SDL_EVENT_DID_ENTER_BACKGROUND:
+			if (primaryMode == kPlayMode && !pausing)
+			{
+				pausing = TRUE;               /* == DoPausing() (1v1/practice) */
+				timePaused = Ticks;
+			}
+			if (ShimInPlayMode())
+				shimInput.pauseTap = 1;       /* the 4P loop pauses via the key path */
+			portSaveEverything();
+			ShimTimeFreezeBegin();
+			break;
+		case SDL_EVENT_WILL_ENTER_FOREGROUND:
+			ShimTimeFreezeEnd();
+			break;
+		case SDL_EVENT_TERMINATING:           /* mobile: the only quit notice we get */
+			portSaveEverything();
+			break;
+		default:
+			break;
+	}
+	return true;
+}
+
+void PortLifecycleInit (void)
+{
+	SDL_AddEventWatch(portAppLifeWatch, NULL);
+}
+
+/* ------------------------------------------------------------------ */
 /* WhosOnFirst — transcribed verbatim from Sources/TeamSetUp.c (the rest
  * of that file is the drag-and-drop Toolbox dialog, replaced by this menu) */
 

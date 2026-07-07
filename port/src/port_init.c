@@ -184,5 +184,8 @@ void InitializeAll (void)
 	speedFlag = 1000000;           /* SpeedTest(): only used for net master election */
 
 	PortInputSetPlayMode(0);
+	PortLifecycleInit();           /* Android background/foreground watch; after
+	                                * LoadThePreferences so a save never writes
+	                                * uninitialized prefs */
 	ShimForcePresent();
 }

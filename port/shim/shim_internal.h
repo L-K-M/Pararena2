@@ -47,6 +47,12 @@ int  PortVideoTouchToLogical (float nx, float ny, float *lx, float *ly);
 void ShimPumpEvents (void);      /* poll SDL, update Ticks/keymap/mouse; may sleep ~0.5ms */
 void ShimAdvanceTicks (void);    /* recompute Ticks from wall clock */
 int  ShimAnyPadButton (int button);  /* is an SDL_GamepadButton down on any connected pad? */
+/* bracket a backgrounded stay (Android): the elapsed gap is added to the tick
+ * epoch so Ticks stays continuous across it instead of fast-forwarding */
+void ShimTimeFreezeBegin (void);
+void ShimTimeFreezeEnd (void);
+int  ShimInPlayMode (void);      /* 1 while a game (1v1 or 4P) owns the input */
+void PortLifecycleInit (void);   /* install the app-lifecycle event watch (port_shell.c) */
 
 /* ---------------- input state (written by pump, read by shims) ---------------- */
 typedef struct ShimInput {
