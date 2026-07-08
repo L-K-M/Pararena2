@@ -488,6 +488,16 @@ void PortDrawMobileControls (void)
 		pxDisc(scr, MC_BRAKE_CX, MC_BRAKE_CY, MC_BRAKE_R,
 		       shimInput.mcBrake ? IDX_YELLOW : IDX_WHITE, IDX_BLACK);
 		pxFillRect(scr, IDX_BLACK, MC_BRAKE_CX - 12, MC_BRAKE_CY - 4, MC_BRAKE_CX + 12, MC_BRAKE_CY + 4);
+
+		/* bash button: white disc with a bold X (the lunge / tackle) */
+		pxDisc(scr, MC_BASH_CX, MC_BASH_CY, MC_BASH_R,
+		       shimInput.mcBash ? IDX_YELLOW : IDX_WHITE, IDX_BLACK);
+		for (int d = -8; d <= 8; d++)
+			for (int t = -1; t <= 1; t++)
+			{
+				pxPlot(scr, IDX_BLACK, MC_BASH_CX + d, MC_BASH_CY + d + t);
+				pxPlot(scr, IDX_BLACK, MC_BASH_CX + d, MC_BASH_CY - d + t);
+			}
 	}
 
 	Index2Color(IDX_BLACK, &c); RGBForeColor(&c);

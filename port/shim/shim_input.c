@@ -291,7 +291,7 @@ void ShimPumpEvents (void)
 	/* mobile on-screen controls + pause button, polled from all active fingers.
 	 * Only while actually playing: the widgets are drawn (and meaningful) only
 	 * then, and this keeps menu taps from registering as catch/brake/pause. */
-	shimInput.mcCatch = shimInput.mcBrake = shimInput.mcPause = 0;
+	shimInput.mcCatch = shimInput.mcBrake = shimInput.mcBash = shimInput.mcPause = 0;
 	shimInput.mcStickActive = 0;
 	if (shimMobile && inPlayMode)
 	{
@@ -319,6 +319,7 @@ void ShimPumpEvents (void)
 				}
 				else if (MC_HIT(fx, fy, MC_CATCH_CX, MC_CATCH_CY, MC_CATCH_R + 8)) shimInput.mcCatch = 1;
 				else if (MC_HIT(fx, fy, MC_BRAKE_CX, MC_BRAKE_CY, MC_BRAKE_R + 8)) shimInput.mcBrake = 1;
+				else if (MC_HIT(fx, fy, MC_BASH_CX, MC_BASH_CY, MC_BASH_R + 8)) shimInput.mcBash = 1;
 			}
 			SDL_free(fs);
 		}
@@ -378,6 +379,7 @@ void ShimPumpEvents (void)
 	}
 	if (shimInput.mcCatch) shimInput.buttonDown = 1;   /* on-screen action buttons */
 	if (shimInput.mcBrake) shimInput.brakeDown = 1;
+	if (shimInput.mcBash) shimInput.bashDown = 1;
 
 	ShimAdvanceTicks();
 	ShimPresentIfDirty();

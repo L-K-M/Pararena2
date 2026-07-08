@@ -532,6 +532,13 @@ static void apply4HumanForces (int seat)
 		                 ks[SDL_SCANCODE_X]);
 		brake = ks[SDL_SCANCODE_SPACE];
 		bash = ks[SDL_SCANCODE_B] || ks[SDL_SCANCODE_N] || ks[SDL_SCANCODE_M];
+		/* the merged shim state carries the touch controls (swipe zones and the
+		 * on-screen catch/brake/bash buttons); in split-input mode it excludes
+		 * the pads, which belong to the other seats — so P1 keeps touch input
+		 * in four-player games too */
+		btn = (Boolean)(btn || shimInput.buttonDown);
+		brake = brake || shimInput.brakeDown;
+		bash = bash || shimInput.bashDown;
 		/* P1 may also use the first gamepad: its stick overrides the mouse while
 		 * deflected, and its buttons fold in alongside the keyboard/mouse ones */
 		{
