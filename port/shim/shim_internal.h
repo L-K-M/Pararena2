@@ -49,6 +49,7 @@ int  PortVideoTouchToLogical (float nx, float ny, float *lx, float *ly);
 
 /* ---------------- timing / events ---------------- */
 void ShimPumpEvents (void);      /* poll SDL, update Ticks/keymap/mouse; may sleep ~0.5ms */
+void ShimTickSleep (void);       /* sleep out the rest of the current ~1/60s tick */
 void ShimAdvanceTicks (void);    /* recompute Ticks from wall clock */
 int  ShimAnyPadButton (int button);  /* is an SDL_GamepadButton down on any connected pad? */
 /* bracket a backgrounded stay (Android): the elapsed gap is added to the tick
