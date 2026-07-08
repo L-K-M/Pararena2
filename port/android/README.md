@@ -40,7 +40,8 @@ There are two touch schemes, chosen by **Options → TOUCH CONTROLS**:
   skate, plus visible action buttons bottom-right: **catch / throw** (the ball
   dot), **brake** (the bar), and **bash** (the X — the dash/tackle lunge; as
   with keyboard/gamepad bash it only fires while not carrying the ball and
-  not braking).
+  not braking). Bashing the ball carrier at full speed **knocks the ball
+  loose** — see "Bash steals" in `../README.md` (off in CLASSIC MODE).
 - **SWIPE** — no visible controls: drag the **left half** of the screen to skate
   (a relative joystick from wherever you press), tap the **right half** for
   **catch** (upper) / **brake** (lower).

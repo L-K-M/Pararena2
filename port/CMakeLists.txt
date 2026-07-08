@@ -90,6 +90,7 @@ set(PARARENA_SOURCES
     src/port_init.c
     src/port_shell.c
     src/port_four.c
+    src/port_steal.c
     src/port_video.c
     src/port_univ.c
     src/port_prefs.c
@@ -142,6 +143,17 @@ else()
 endif()
 set_source_files_properties("${GAME_SRC_DIR}/Render.c" PROPERTIES
     COMPILE_OPTIONS "${RENDER_FLAGS}")
+
+# Dynamics.c only: the same trick for HandleCollisions (its callers are all in
+# PlayCore.c). port_steal.c provides HandleCollisions: the verbatim pass plus
+# the bash-steal fumble check, active only outside classic mode.
+if(MSVC)
+    set(DYNAMICS_FLAGS "${GAME_FLAGS};/DHandleCollisions=HandleCollisionsGame")
+else()
+    set(DYNAMICS_FLAGS "${GAME_FLAGS};-DHandleCollisions=HandleCollisionsGame")
+endif()
+set_source_files_properties("${GAME_SRC_DIR}/Dynamics.c" PROPERTIES
+    COMPILE_OPTIONS "${DYNAMICS_FLAGS}")
 
 # copy the asset pack next to the binary (desktop only; on Android the pack is
 # bundled into the APK's assets/ by Gradle instead)

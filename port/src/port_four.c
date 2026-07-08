@@ -11,6 +11,7 @@
  * decision call, which is exactly the world the 1992 code expects.
  */
 
+#include <math.h>
 #include <SDL3/SDL.h>
 #include "shim_internal.h"
 #include "Globals.h"
@@ -32,6 +33,15 @@
 /* shim_input.c */
 int  ShimPadRead (int idx, float *x, float *y, int *btn, int *brake, int *bash);
 void PortInputSetPlayMode (int playing);
+/* port_steal.c — bash steals (fumbles), shared with the 1v1 wrapper */
+extern long portStealHeldSince;
+int   PortStealEnabled (void);
+int   PortStealGraceOver (void);
+int   PortStealFastEnough (float closing);
+int   PortStealLogging (void);
+float PortStealClosing (short bshX, short bshZ, short bshVX, short bshVZ,
+                        short carX, short carZ, short carVX, short carVZ);
+void  PortStealPopBall (playerType *carrier, float nx, float nz);
 /* port_shell.c */
 void DoOpeningAnnouncer (void);
 void DrawControlsCard (const char *title);   /* menu controls card */
@@ -312,6 +322,7 @@ static void do4Merged (int seat)
 	theBall.mode = kBallHeld;
 	ballOwner = seat;
 	lastToucher = seat;
+	portStealHeldSince = Ticks;           /* bash-steal grace window starts */
 	for (int i = 0; i < 4; i++)
 		ent[i]->loopsBallHeld = 0;
 	who->loopsBallHeld = kLoopLimitOnHeldBall;
@@ -429,10 +440,12 @@ static void do4PersonPerson (playerType *a, playerType *b)
 	b->zVel = (short)n2z + o2z;
 }
 
-static void check4PersonPerson (playerType *a, playerType *b)
+static void check4PersonPerson (int ia, int ib)
 {
 	#define kSqrImpactPP4 2560000L
+	playerType *a = ent[ia], *b = ent[ib];
 	long dx, d2;
+	short aX, aZ, aVX, aVZ, bX, bZ, bVX, bVZ;
 
 	if ((a->mode != kInArena) || (b->mode != kInArena) || (a->justHitOpponent != 0))
 		return;
@@ -442,6 +455,11 @@ static void check4PersonPerson (playerType *a, playerType *b)
 	d2 = dx + ((long)b->zPos - a->zPos) * ((long)b->zPos - a->zPos);
 	if (d2 >= kSqrImpactPP4)
 		return;
+
+	/* pre-impact snapshot for the bash-steal check (the momentum exchange
+	 * overwrites the incoming velocities) */
+	aX = a->xPos; aZ = a->zPos; aVX = a->xVel; aVZ = a->zVel;
+	bX = b->xPos; bZ = b->zPos; bVX = b->xVel; bVZ = b->zVel;
 
 	do4PersonPerson(a, b);
 	{
@@ -468,6 +486,53 @@ static void check4PersonPerson (playerType *a, playerType *b)
 			d2 = dx + ((long)b->zPos - a->zPos) * ((long)b->zPos - a->zPos);
 		} while (d2 < kSqrImpactPP4 && guard < 200);
 	}
+
+	/* bash steal (port_steal.c): a fresh impact on the carrier at closing
+	 * speed knocks the ball loose. Skipped between 2v2 teammates — stripping
+	 * your partner is pure grief. The fumbled ball is credited to the basher
+	 * (lastToucher), so rolling it out of bounds fouls them, not the victim. */
+	if (PortStealEnabled() && ballOwner >= 0 &&
+	    (ballOwner == ia || ballOwner == ib))
+	{
+		int carSeat = ballOwner;
+		int bshSeat = (carSeat == ia) ? ib : ia;
+		playerType *carrier = ent[carSeat];
+		playerType *basher = ent[bshSeat];
+		float closing, ndx, ndz, nd;
+
+		if (fourMode == FOUR_2V2 && TEAM_OF(carSeat) == TEAM_OF(bshSeat))
+			return;
+
+		if (carSeat == ia)
+			closing = PortStealClosing(bX, bZ, bVX, bVZ, aX, aZ, aVX, aVZ);
+		else
+			closing = PortStealClosing(aX, aZ, aVX, aVZ, bX, bZ, bVX, bVZ);
+
+		if (PortStealLogging())
+			ShimLog("steal(4P): P%d->P%d closing=%.0f bash=%d grace=%d -> %s",
+			        bshSeat + 1, carSeat + 1, (double)closing,
+			        basher->bashApplied, !PortStealGraceOver(),
+			        (basher->bashApplied && PortStealGraceOver() &&
+			         PortStealFastEnough(closing)) ? "FUMBLE" : "shove");
+
+		if (!basher->bashApplied || !PortStealGraceOver() ||
+		    !PortStealFastEnough(closing))
+			return;
+
+		/* pre-impact normal from basher through carrier */
+		ndx = (float)((carSeat == ia) ? aX - bX : bX - aX);
+		ndz = (float)((carSeat == ia) ? aZ - bZ : bZ - aZ);
+		nd = sqrtf(ndx * ndx + ndz * ndz);
+		if (nd < 1.0f)
+			return;
+		PortStealPopBall(carrier, ndx / nd, ndz / nd);
+
+		ballOwner = -1;
+		lastToucher = bshSeat;
+		syncLegacyBallState();
+		if (fourMode == FOUR_2V2)
+			UpdateArrows();
+	}
 }
 
 static void handle4Collisions (void)
@@ -476,7 +541,7 @@ static void handle4Collisions (void)
 		check4PersonBall(i);
 	for (int i = 0; i < 4; i++)
 		for (int j = i + 1; j < 4; j++)
-			check4PersonPerson(ent[i], ent[j]);
+			check4PersonPerson(i, j);
 
 	for (int i = 0; i < 4; i++)
 	{
