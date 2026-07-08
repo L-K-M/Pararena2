@@ -35,6 +35,29 @@ void ShimTimeInit (void)
 	startNS = SDL_GetTicksNS();
 }
 
+/* App lifecycle (Android): while the app is backgrounded SDL blocks the main
+ * thread, but SDL_GetTicksNS() keeps counting — on resume, Ticks would jump
+ * by the whole background stay and fast-forward the game clock (a paused
+ * tournament could lose minutes of game time to one phone call). The
+ * lifecycle watch brackets the stay with these two calls; the gap is added
+ * to the tick epoch so Ticks resumes exactly where it left off. */
+static Uint64 bgEnteredNS;
+
+void ShimTimeFreezeBegin (void)
+{
+	if (!bgEnteredNS)
+		bgEnteredNS = SDL_GetTicksNS();
+}
+
+void ShimTimeFreezeEnd (void)
+{
+	if (bgEnteredNS)
+	{
+		startNS += SDL_GetTicksNS() - bgEnteredNS;
+		bgEnteredNS = 0;
+	}
+}
+
 long ShimTicksRead (void)
 {
 	long t = (long)((SDL_GetTicksNS() - startNS) * 60ull * (unsigned)shimTickMult / 1000000000ull);
