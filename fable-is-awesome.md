@@ -429,6 +429,12 @@ branches were cut from the same main commit and touch disjoint regions).
 The combined result was rebuilt and re-verified: clean build, 1v1 CPU demo
 and all three four-player demos ran headless to completion.
 
+### Post-review additions
+
+| Branch | What | Resolution |
+|---|---|---|
+| `feat/bash-steal` | **Bash steals** (designed in discussion): bashing the carrier at speed knocks the ball loose. Deterministic, physics-gated — a fresh impact with bash held and closing speed ≥ 4200 along the line of impact pops the ball free along the hit direction (loose-ball scramble, not a hand-over). ~1 s post-catch grace; the fumble is credited to the basher, so rolling it out of bounds fouls them; 2v2 teammates exempt; **off in CLASSIC MODE**. Threshold tuned from instrumented AI demos (`PARARENA_STEAL_LOG=1`): grinding contact ≤ ~3200, attack runs 5000–6500; at 4200 an FFA-4 demo yields a couple of strips per game — both by Heavy Otto, fittingly. | ✅ [PR #15](https://github.com/L-K-M/Pararena2/pull/15) |
+
 Left for future rounds (lower confidence or larger scope): B1 forfeit-stats
 parity, A9 papercuts batch, §6 window-layer controls, foul pips, result card,
 stats viewers, small arena, GIF export, net play.
