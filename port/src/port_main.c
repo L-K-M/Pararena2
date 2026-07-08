@@ -88,6 +88,11 @@ int main (int argc, char **argv)
 
 #ifdef __ANDROID__
 	shimMobile = 1;                         /* always a touch device */
+	/* SDL only engages Android's immersive mode (hiding the navigation bar /
+	 * gesture pill) for windows with the fullscreen flag — without it the
+	 * system bars stay up, shrinking the already-letterboxed image and
+	 * sitting exactly where thumbs rest on the on-screen controls. */
+	fullscreen = 1;
 #endif
 
 	if (shimHeadless)
