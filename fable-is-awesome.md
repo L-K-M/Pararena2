@@ -415,20 +415,19 @@ Ordered to minimize cross-branch conflicts; each lands on its own branch.
 | # | Branch | Covers | Files | Resolution |
 |---|---|---|---|---|
 | 1 | ~~`fix/touch-letterbox-mapping`~~ | A1 | — | superseded: landed on main via `2cc7fe7` before this plan executed |
-| 2 | `fix/touch-modal-softlocks` | A2, A3 | port_shell.c, shim_os.c | ✅ [PR #8](https://github.com/L-K-M/Pararena2/pull/8) |
+| 2 | `fix/touch-modal-softlocks` | A2, A3 | port_shell.c, shim_os.c | ✅ **merged** — [PR #8](https://github.com/L-K-M/Pararena2/pull/8) |
 | 3 | ~~`fix/pause-tap-safety`~~ | A4 | — | superseded: landed on main via `2cc7fe7` |
-| 4 | `fix/android-lifecycle` | A5 (+ input-latch hygiene on mode transitions) | port_shell.c, port_init.c, shim_input.c, shim_os.c, shim_internal.h | ✅ [PR #9](https://github.com/L-K-M/Pararena2/pull/9) |
-| 5 | `fix/android-immersive` | A6 | port_main.c | ✅ [PR #10](https://github.com/L-K-M/Pararena2/pull/10) |
-| 6 | `feat/touch-bash-button` | A7 (+ dead 4P touch buttons for P1) | mobile_controls.h, shim_input.c, port_shell.c, port_four.c | ✅ [PR #11](https://github.com/L-K-M/Pararena2/pull/11) |
-| 7 | `feat/announcer-skip` | A8 | port_shell.c, shim_sound.c | ✅ [PR #12](https://github.com/L-K-M/Pararena2/pull/12) |
-| 8 | `fix/handle-size` | B2 | shim_res.c, shim_qd.c | ✅ [PR #13](https://github.com/L-K-M/Pararena2/pull/13) |
-| 9 | `fix/pin-sdl-fetch` | B4 | CMakeLists.txt, fetch-deps.sh | ✅ [PR #14](https://github.com/L-K-M/Pararena2/pull/14) |
+| 4 | `fix/android-lifecycle` | A5 (+ input-latch hygiene on mode transitions) | port_shell.c, port_init.c, shim_input.c, shim_os.c, shim_internal.h | ✅ **merged** — [PR #9](https://github.com/L-K-M/Pararena2/pull/9) |
+| 5 | `fix/android-immersive` | A6 | port_main.c | ✅ **merged** — [PR #10](https://github.com/L-K-M/Pararena2/pull/10) |
+| 6 | `feat/touch-bash-button` | A7 (+ dead 4P touch buttons for P1) | mobile_controls.h, shim_input.c, port_shell.c, port_four.c | ✅ **merged** — [PR #11](https://github.com/L-K-M/Pararena2/pull/11) |
+| 7 | `feat/announcer-skip` | A8 | port_shell.c, shim_sound.c | ✅ **merged** — [PR #12](https://github.com/L-K-M/Pararena2/pull/12) |
+| 8 | `fix/handle-size` | B2 | shim_res.c, shim_qd.c | ✅ **merged** — [PR #13](https://github.com/L-K-M/Pararena2/pull/13) |
+| 9 | `fix/pin-sdl-fetch` | B4 | CMakeLists.txt, fetch-deps.sh | ✅ **merged** — [PR #14](https://github.com/L-K-M/Pararena2/pull/14) |
 
-All nine branches were cut from the same main commit and touch disjoint
-regions where possible; the known overlap points are `shim_internal.h`
-(each adds declarations in different sections — merges cleanly) and
-`port_shell.c` / `shim_input.c` (different functions per branch). Merge
-PRs in table order to keep any conflicts trivial.
+All seven PRs merged into main in table order with **zero conflicts** (the
+branches were cut from the same main commit and touch disjoint regions).
+The combined result was rebuilt and re-verified: clean build, 1v1 CPU demo
+and all three four-player demos ran headless to completion.
 
 Left for future rounds (lower confidence or larger scope): B1 forfeit-stats
 parity, A9 papercuts batch, §6 window-layer controls, foul pips, result card,
