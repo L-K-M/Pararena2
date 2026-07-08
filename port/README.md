@@ -67,15 +67,38 @@ Instant replay is disabled in four-player games for now.
 `--four-demo N` (1=2v2, 2=FFA-2, 3=FFA-4) watches an all-AI four-player
 game, like `--cpu-demo` does for 1v1.
 
+## Bash steals
+
+Bashing the ball carrier at speed knocks the ball loose. The strip is
+deterministic — no dice rolls: it happens exactly when a fresh body check
+connects with **bash held** and the **closing speed along the line of
+impact** is high enough. A committed full-speed lunge strips; a slow
+shoulder-rub while you grind along the rim only shoves. The ball pops free
+*along the hit direction* — past the carrier, away from the basher — so a
+strip starts a loose-ball scramble rather than handing over possession.
+
+The fine print: a fresh catch is protected for about a second; the loose
+ball is credited to the **basher**, so a fumble that rolls out of bounds is
+the basher's foul, not the victim's; and the engine's collision cooldown
+rules out rapid re-strips. Since bash has always been disabled while
+carrying, the carrier can't strip back — holding the ball finally costs
+something during the 20-second holding clock. (Heavy Otto is now exactly as
+dangerous as he looks.)
+
+Bash steals are a port addition, **disabled in CLASSIC MODE** (below). For
+tuning or curiosity, `PARARENA_STEAL_LOG=1` logs every carrier impact with
+its closing speed and verdict.
+
 ## HUD enhancements and Classic mode
 
 In every play mode — including the classic 1v1 game — each human player wears a
 small numbered plate ("P1"…"P4") above their skater, and whoever is holding the
 ball gets a caret marker above their head, so possession is always readable. If
-you'd rather have the untouched 1992 look, turn on **CLASSIC MODE** in the
-Options menu: it hides these overlays everywhere (and is the switch we'll gate
-any future gameplay tweaks behind, so the classic experience stays classic). The
-setting persists across launches.
+you'd rather have the untouched 1992 experience, turn on **CLASSIC MODE** in the
+Options menu: it hides these overlays everywhere and **turns off bash steals**,
+restoring the original rules exactly — it's the switch the port gates gameplay
+changes behind, so the classic experience stays classic. The setting persists
+across launches.
 
 ## Controls
 
