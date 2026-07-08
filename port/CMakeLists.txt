@@ -13,8 +13,11 @@ if(NOT TARGET SDL3::SDL3)
         include(FetchContent)
         set(SDL_TESTS OFF CACHE BOOL "" FORCE)
         set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+        # pinned: SHA-256 of the official libsdl.org SDL3-3.4.12.tar.gz —
+        # keep the hash in sync with android/fetch-deps.sh when bumping SDL
         FetchContent_Declare(SDL3
-            URL https://www.libsdl.org/release/SDL3-3.4.12.tar.gz)
+            URL https://www.libsdl.org/release/SDL3-3.4.12.tar.gz
+            URL_HASH SHA256=f07b958a9ac5020fb7a44cadb957f658b2149c3c8abb4f63145fac9303249db7)
         FetchContent_MakeAvailable(SDL3)
     endif()
 endif()
