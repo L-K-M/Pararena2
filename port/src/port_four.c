@@ -48,6 +48,8 @@ void DrawControlsCard (const char *title);   /* menu controls card */
 void DrawPauseScreen (void);                 /* full-screen pause art */
 void PortDrawMobileControls (void);          /* on-screen touch controls overlay */
 extern int classicMode;                      /* Options toggle: hide HUD enhancements */
+const char   *PortPlayerName (int seat);     /* pre-match setup: name for the plate */
+unsigned char PortPlayerColor (int seat);    /* pre-match setup: badge colour */
 
 /* ---------------------------------------------------------------- state */
 
@@ -1316,7 +1318,8 @@ static int headOverlayRect (int seat, int holds, Rect *out)
 	SetRect(out, cx, (short)(top - 2), cx, (short)(top - 2));
 	if (human)
 	{
-		Rect r; SetRect(&r, (short)(cx - 10), (short)(top - 13), (short)(cx + 10), (short)(top - 2));
+		/* wide enough for a 3-char name plate */
+		Rect r; SetRect(&r, (short)(cx - 16), (short)(top - 13), (short)(cx + 16), (short)(top - 2));
 		UnionRect(out, &r, out);
 	}
 	if (holds)
@@ -1342,24 +1345,29 @@ static void drawHeadOverlay (int seat, int holds, const BitMap *work)
 	}
 	if (human)
 	{
-		/* a small "P#" plate: black fill, seat-colored border and text */
-		short l = (short)(cx - 10), r = (short)(cx + 9);
+		/* the player's name plate: black fill, badge-coloured border and text. The
+		 * name (up to 3 chars) and colour come from the pre-match setup card. */
+		unsigned char badge = PortPlayerColor(seat);
+		const char *nm = PortPlayerName(seat);
+		short l = (short)(cx - 16), r = (short)(cx + 16);
 		short t = (short)(top - 13), b = (short)(top - 3);
 		for (short y = t; y <= b; y++)
 			for (short x = l; x <= r; x++)
 				plotPix(work, 15 /* black */, x, y);
-		for (short x = l; x <= r; x++) { plotPix(work, seatColor[seat], x, t); plotPix(work, seatColor[seat], x, b); }
-		for (short y = t; y <= b; y++) { plotPix(work, seatColor[seat], l, y); plotPix(work, seatColor[seat], r, y); }
+		for (short x = l; x <= r; x++) { plotPix(work, badge, x, t); plotPix(work, badge, x, b); }
+		for (short y = t; y <= b; y++) { plotPix(work, badge, l, y); plotPix(work, badge, r, y); }
 		{
 			GrafPtr wasPort;
 			RGBColor c;
 			Str255 ps;
-			ps[0] = 2; ps[1] = 'P'; ps[2] = (unsigned char)('1' + seat);
+			int n = 0;
+			for (; n < 3 && nm && nm[n]; n++) ps[1 + n] = (unsigned char)nm[n];
+			ps[0] = (unsigned char)n;
 			GetPort(&wasPort);
 			SetPort((GrafPtr)offCWorkPtr);
-			Index2Color(seatColor[seat], &c);
+			Index2Color(badge, &c);
 			RGBForeColor(&c);
-			MoveTo((short)(cx - 8), (short)(top - 5));
+			MoveTo((short)(cx - 3 * n), (short)(top - 5));   /* ~6px/char, centred */
 			DrawString(ps);
 			Index2Color(15, &c);
 			RGBForeColor(&c);           /* leave a black pen for the verbatim code */

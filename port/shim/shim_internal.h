@@ -112,6 +112,8 @@ extern long  shimAutoQuitTicks;     /* >0: quit after this many ticks (testing) 
 extern const char *shimFrameDumpDir;/* non-NULL: dump screen PPM every N ticks */
 extern int   shimFrameDumpEvery;
 void ShimMaybeDumpFrame (void);
+void ShimDumpScreenPPM (const char *path);   /* write current screen to a PPM */
+extern int shimSetupPreview;                 /* --setup-preview: dump the setup card and quit */
 void ShimLog (const char *fmt, ...);
 
 #endif
