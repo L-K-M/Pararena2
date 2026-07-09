@@ -67,6 +67,14 @@ int main (int argc, char **argv)
 			shimFrameDumpEvery = atoi(argv[++i]);
 		else if (strcmp(argv[i], "--mobile") == 0)
 			shimMobile = 1;                 /* force touch UI on desktop (testing) */
+		else if (strcmp(argv[i], "--window-shot") == 0 && i + 1 < argc)
+			shimWindowShotPath = argv[++i]; /* save each presented frame as BMP (testing) */
+		else if (strcmp(argv[i], "--window-size") == 0 && i + 1 < argc)
+		{
+			if (sscanf(argv[++i], "%dx%d", &shimWinWOverride, &shimWinHOverride) != 2 ||
+			    shimWinWOverride < 64 || shimWinHOverride < 64)
+				shimWinWOverride = shimWinHOverride = 0;
+		}
 		else if (strcmp(argv[i], "--fast") == 0 && i + 1 < argc)
 		{
 			extern int shimTickMult;

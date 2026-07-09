@@ -14,11 +14,20 @@ static uint32_t     *rgba;
 static int           texW, texH;
 static int           isFullscreen;
 
+/* side-panel textures (control cards in the letterbox bars, port_panels.c) */
+static SDL_Texture  *panelTex[2];
+static int           panelTexW[2], panelTexH[2];
+static uint32_t      panelTexVer[2];
+static uint32_t     *panelRGBA;
+static size_t        panelRGBACap;
+
 int PortVideoOpen (int w, int h, int startFullscreen)
 {
+	int winW = shimWinWOverride > 0 ? shimWinWOverride : w * 2;
+	int winH = shimWinHOverride > 0 ? shimWinHOverride : h * 2;
 	if (shimHeadless)
 		return 1;
-	win = SDL_CreateWindow("Pararena 2", w * 2, h * 2, SDL_WINDOW_RESIZABLE);
+	win = SDL_CreateWindow("Pararena 2", winW, winH, SDL_WINDOW_RESIZABLE);
 	if (!win)
 	{
 		ShimLog("SDL_CreateWindow failed: %s", SDL_GetError());
@@ -58,8 +67,79 @@ int PortVideoOpen (int w, int h, int startFullscreen)
 	return 1;
 }
 
+/* draw the control panels into the letterbox side bars. Runs with logical
+ * presentation DISABLED, so all coordinates are render-output pixels; `pr`
+ * is where the letterboxed game image sits in that same space. The panel
+ * bitmaps come from port_panels.c and are re-uploaded only when their
+ * version changes. */
+static void drawSidePanels (const SDL_FRect *pr, int ow)
+{
+	float scale = pr->h / 480.0f;
+	int wLog;
+	if (scale < 1.0f)        /* downscaled 8x8 text drops glyph rows; hide */
+		return;
+	wLog = (int)(pr->x / scale) - 8;      /* usable logical width of a bar */
+	if (wLog < 96)                        /* too narrow to be readable */
+		return;
+	if (wLog > 176)
+		wLog = 176;
+	for (int side = 0; side < 2; side++)
+	{
+		int w = 0, h = 0;
+		uint32_t ver = 0;
+		const uint8_t *pix = PortPanelImage(side, wLog, &w, &h, &ver);
+		if (!pix || w <= 0 || h <= 0)
+			continue;
+		if (panelTex[side] && (panelTexW[side] != w || panelTexH[side] != h))
+		{
+			SDL_DestroyTexture(panelTex[side]);
+			panelTex[side] = NULL;
+		}
+		if (!panelTex[side])
+		{
+			panelTex[side] = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ABGR8888,
+			                                   SDL_TEXTUREACCESS_STATIC, w, h);
+			if (!panelTex[side])
+				continue;
+			SDL_SetTextureScaleMode(panelTex[side], SDL_SCALEMODE_NEAREST);
+			panelTexW[side] = w;
+			panelTexH[side] = h;
+			panelTexVer[side] = ver - 1;   /* force the first upload */
+		}
+		if (panelTexVer[side] != ver)
+		{
+			size_t need = (size_t)w * h * 4;
+			if (need > panelRGBACap)
+			{
+				free(panelRGBA);
+				panelRGBA = (uint32_t *)malloc(need);
+				panelRGBACap = panelRGBA ? need : 0;
+			}
+			if (!panelRGBA)
+				continue;
+			for (long i = 0; i < (long)w * h; i++)
+			{
+				const uint8_t *c = shimPaletteRGBA[pix[i] & 15];
+				panelRGBA[i] = (uint32_t)c[0] | (uint32_t)c[1] << 8 |
+				               (uint32_t)c[2] << 16 | 0xFF000000u;
+			}
+			SDL_UpdateTexture(panelTex[side], NULL, panelRGBA, w * 4);
+			panelTexVer[side] = ver;
+		}
+		{
+			float pw = w * scale, ph = h * scale;
+			float bx = side ? pr->x + pr->w : 0.0f;
+			float bw = side ? (float)ow - pr->x - pr->w : pr->x;
+			SDL_FRect dst = { bx + (bw - pw) / 2, pr->y + (pr->h - ph) / 2, pw, ph };
+			SDL_RenderTexture(ren, panelTex[side], NULL, &dst);
+		}
+	}
+}
+
 void PortVideoPresent (const uint8_t *pix, int w, int h)
 {
+	SDL_FRect pr;
+	int ow = 0, oh = 0;
 	if (!ren || !tex)
 		return;
 	if (w > texW) w = texW;
@@ -73,6 +153,30 @@ void PortVideoPresent (const uint8_t *pix, int w, int h)
 	SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
 	SDL_RenderClear(ren);
 	SDL_RenderTexture(ren, tex, NULL, NULL);
+	/* letterbox side bars? fill them with the control panels. Toggling
+	 * logical presentation mid-frame is supported: it applies at
+	 * command-queue time, so the game texture above keeps its letterbox
+	 * mapping while the panels draw in raw output pixels. */
+	/* SDL_GetRenderOutputSize, NOT ...Current...: the latter reports the
+	 * logical-presentation-adjusted size, but the bars live outside it */
+	if (SDL_GetRenderLogicalPresentationRect(ren, &pr) && pr.w > 0 && pr.h > 0 &&
+	    SDL_GetRenderOutputSize(ren, &ow, &oh) &&
+	    (pr.x >= 1.0f || shimWindowShotPath))
+	{
+		SDL_SetRenderLogicalPresentation(ren, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+		if (pr.x >= 1.0f)
+			drawSidePanels(&pr, ow);
+		if (shimWindowShotPath)   /* testing: full-window screenshot per present */
+		{
+			SDL_Surface *shot = SDL_RenderReadPixels(ren, NULL);
+			if (shot)
+			{
+				SDL_SaveBMP(shot, shimWindowShotPath);
+				SDL_DestroySurface(shot);
+			}
+		}
+		SDL_SetRenderLogicalPresentation(ren, texW, texH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	}
 	SDL_RenderPresent(ren);
 }
 

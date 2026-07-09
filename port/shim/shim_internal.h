@@ -43,6 +43,14 @@ void ShimForcePresent (void);
 void PortVideoPresent (const uint8_t *pix, int w, int h);
 void PortVideoSetFullscreen (int on);
 int  PortVideoIsFullscreen (void);
+/* control-reference card for one letterbox bar (port_panels.c): side 0 =
+ * left, 1 = right; wLog = desired width in logical pixels. Returns the 8bpp
+ * bitmap (valid until the next call), rebuilt lazily when the input state
+ * changes; *version bumps on each rebuild so callers know to re-upload. */
+const uint8_t *PortPanelImage (int side, int wLog, int *w, int *h, uint32_t *version);
+/* input slot of a 4P seat while a four-player game runs (port_four.c):
+ * -1 = AI or no game, 0 = keyboard/mouse/touch (+pad 1), n>=2 = pad n */
+int PortFourSeatSlot (int seat);
 /* window-normalized touch (0..1) -> logical render coords (0..640, 0..480),
  * undoing the letterbox; 0 if headless/no renderer. */
 int  PortVideoTouchToLogical (float nx, float ny, float *lx, float *ly);
@@ -111,6 +119,8 @@ extern int   shimHeadless;
 extern long  shimAutoQuitTicks;     /* >0: quit after this many ticks (testing) */
 extern const char *shimFrameDumpDir;/* non-NULL: dump screen PPM every N ticks */
 extern int   shimFrameDumpEvery;
+extern const char *shimWindowShotPath;  /* --window-shot: save each presented frame as BMP */
+extern int   shimWinWOverride, shimWinHOverride;   /* --window-size: initial window size */
 void ShimMaybeDumpFrame (void);
 void ShimLog (const char *fmt, ...);
 

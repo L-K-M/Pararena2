@@ -92,6 +92,7 @@ set(PARARENA_SOURCES
     src/port_four.c
     src/port_steal.c
     src/port_video.c
+    src/port_panels.c
     src/port_univ.c
     src/port_prefs.c
     src/port_stubs.c

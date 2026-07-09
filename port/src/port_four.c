@@ -573,6 +573,14 @@ static void handle4Collisions (void)
 
 /* ---------------------------------------------------------------- input */
 
+/* the side panels (port_panels.c) list who holds which device */
+int PortFourSeatSlot (int seat)
+{
+	if (fourMode == FOUR_OFF || seat < 0 || seat > 3)
+		return -1;
+	return seatSlot[seat];
+}
+
 static void apply4HumanForces (int seat)
 {
 	playerType *who = ent[seat];
