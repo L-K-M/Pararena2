@@ -12,6 +12,7 @@ int  shimMobile = 0;              /* touch device: show on-screen controls + pau
 long shimAutoQuitTicks = 0;
 const char *shimFrameDumpDir = NULL;
 int  shimFrameDumpEvery = 60;
+int  shimSetupPreview = 0;
 
 static Uint64 startNS;
 static long   lastDumpTick = -1;
@@ -356,6 +357,20 @@ OSErr FSClose (short refNum) { (void)refNum; return -1; }
 
 /* ---------------- frame dumping (headless verification) ---------------- */
 
+/* write the current 8bpp screen (expanded through the palette) to a PPM */
+void ShimDumpScreenPPM (const char *path)
+{
+	FILE *f = fopen(path, "wb");
+	if (!f)
+		return;
+	int w = screenBits.bounds.right, h = screenBits.bounds.bottom;
+	fprintf(f, "P6\n%d %d\n255\n", w, h);
+	const uint8_t *pix = (const uint8_t *)screenBits.baseAddr;
+	for (long i = 0; i < (long)w * h; i++)
+		fwrite(shimPaletteRGBA[pix[i] & 15], 1, 3, f);
+	fclose(f);
+}
+
 void ShimMaybeDumpFrame (void)
 {
 	if (!shimFrameDumpDir)
@@ -366,13 +381,5 @@ void ShimMaybeDumpFrame (void)
 	lastDumpTick = bucket;
 	char path[512];
 	snprintf(path, sizeof path, "%s/frame_%06ld.ppm", shimFrameDumpDir, lastTickSeen);
-	FILE *f = fopen(path, "wb");
-	if (!f)
-		return;
-	int w = screenBits.bounds.right, h = screenBits.bounds.bottom;
-	fprintf(f, "P6\n%d %d\n255\n", w, h);
-	const uint8_t *pix = (const uint8_t *)screenBits.baseAddr;
-	for (long i = 0; i < (long)w * h; i++)
-		fwrite(shimPaletteRGBA[pix[i] & 15], 1, 3, f);
-	fclose(f);
+	ShimDumpScreenPPM(path);
 }
