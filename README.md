@@ -10,7 +10,6 @@ support and fullscreen — lives in [`port/`](port/). It compiles the
 original game code in `Sources/` verbatim over a small Toolbox shim and
 uses the original art/sound/physics data extracted from
 `Pararena.project.r`. See [`port/README.md`](port/README.md) to build and
-play, and [`MODERNIZATION.md`](MODERNIZATION.md) for the engineering
+play, or download the latest port builds from [GitHub Releases](https://github.com/L-K-M/Pararena2/releases/latest).
+[`MODERNIZATION.md`](MODERNIZATION.md) records the engineering
 evaluation behind the port.
-
-
