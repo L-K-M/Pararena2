@@ -1,6 +1,9 @@
 # Pararena 2.0
 Sources to Pararena, the commercial Macintosh game by John Calhoun, published by Casady &amp; Greene, Inc.
 
+> [!IMPORTANT]
+> LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
+
 ![Sample Box Art](https://github.com/softdorothy/pararena_2/blob/master/Misc/Pararena%20Sample%20Art.png)
 
 ## Playing it today
