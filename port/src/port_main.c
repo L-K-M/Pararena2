@@ -67,6 +67,8 @@ int main (int argc, char **argv)
 			shimFrameDumpEvery = atoi(argv[++i]);
 		else if (strcmp(argv[i], "--mobile") == 0)
 			shimMobile = 1;                 /* force touch UI on desktop (testing) */
+		else if (strcmp(argv[i], "--setup-preview") == 0)
+			shimSetupPreview = 1;           /* dump the player-setup card and quit (testing) */
 		else if (strcmp(argv[i], "--window-shot") == 0 && i + 1 < argc)
 			shimWindowShotPath = argv[++i]; /* save each presented frame as BMP (testing) */
 		else if (strcmp(argv[i], "--window-size") == 0 && i + 1 < argc)

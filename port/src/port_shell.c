@@ -75,6 +75,57 @@ static const char *seatNames[7] = { "HUMAN (PAD)", "SIMPLE GEORGE", "MAD MARA", 
 static int visItems[MI_ITEMS];
 static int visCount;
 
+/* ---- per-player identity, chosen on the pre-match setup screen ----
+ * Indexed by seat (0 = P1 — the 1v1 human or four-player seat 0 — then 1..3).
+ * Each human picks a roster character, a badge colour, and a 3-char name; the
+ * name + colour are drawn on their in-game head plate. */
+static const char *rosterNames[6] = { "GEORGE", "MARA", "OTTO", "CLAIRE", "EAZE", "TEAK" };
+/* badge colours the player can pick, as Apple-palette indices */
+static const unsigned char colorChoices[8] = { 6, 7, 8, 1, 2, 3, 4, 5 };
+static const char *colorNames[8] = { "BLUE", "CYAN", "GREEN", "YELLOW",
+                                     "ORANGE", "RED", "MAGENTA", "PURPLE" };
+#define ROSTER_COUNT 6
+#define COLOR_COUNT  8
+
+static int  portPlayerChar[4]  = { 0, 1, 2, 3 };   /* roster index 0..5 */
+static int  portPlayerColorI[4] = { 0, 5, 2, 6 };  /* index into colorChoices */
+static char portPlayerName[4][4];                  /* up to 3 chars + NUL */
+
+static void defaultNameFor (int roster, char *out)   /* first 3 letters, upper */
+{
+	const char *s = rosterNames[roster % ROSTER_COUNT];
+	int i = 0;
+	for (; i < 3 && s[i]; i++)
+	{
+		char c = s[i];
+		out[i] = (c >= 'a' && c <= 'z') ? (char)(c - 32) : c;
+	}
+	for (; i < 3; i++) out[i] = ' ';
+	out[3] = 0;
+}
+
+/* seed any still-empty names from the seat's default character */
+void PortPlayersInit (void)
+{
+	for (int s = 0; s < 4; s++)
+		if (!portPlayerName[s][0])
+			defaultNameFor(portPlayerChar[s], portPlayerName[s]);
+}
+
+/* accessors for the in-game head plates (port_four.c) */
+const char *PortPlayerName (int seat)
+{
+	if (seat < 0 || seat >= 4) return NULL;
+	if (!portPlayerName[seat][0]) defaultNameFor(portPlayerChar[seat], portPlayerName[seat]);
+	return portPlayerName[seat];
+}
+
+unsigned char PortPlayerColor (int seat)
+{
+	int ci = (seat >= 0 && seat < 4) ? portPlayerColorI[seat] : 0;
+	return colorChoices[ci % COLOR_COUNT];
+}
+
 static void buildMenuItems (void)
 {
 	int n = 0;
@@ -85,7 +136,7 @@ static void buildMenuItems (void)
 		visItems[n++] = MI_GAME;
 		visItems[n++] = MI_OPPONENT;
 		visItems[n++] = MI_LEAGUE;
-		visItems[n++] = MI_SIDE;
+		/* PLAY SIDE now lives on the pre-match player-setup card */
 	}
 	else
 	{
@@ -116,6 +167,7 @@ void PortShellSyncFromPrefs (void)
 		selLeague = isLeague;
 	selSide = leftGoalIsPlayers ? 0 : 1;
 	PortLoadSettings(&classicMode, &mobileOnScreen);
+	PortPlayersInit();
 }
 
 /* ------------------------------------------------------------------ */
@@ -566,6 +618,313 @@ static void ShowControlsScreen (void)
 	menuDirty = 1;
 }
 
+/* ================= pre-match player setup ================= */
+/* Fields on a setup card, in navigation order. SF_SIDE is present only in 1v1. */
+enum { SF_CHAR, SF_COLOR, SF_NAME0, SF_NAME1, SF_NAME2, SF_SIDE };
+#define SC_CHAR_Y   54
+#define SC_COLOR_Y  78
+#define SC_NAME_Y   108
+#define SC_SIDE_Y   138
+
+/* cycle a name character through {space, A..Z} */
+static char cycleChar (char c, int dir)
+{
+	int idx = (c >= 'A' && c <= 'Z') ? (c - 'A' + 1) : 0;
+	idx = (idx + dir + 27) % 27;
+	return idx == 0 ? ' ' : (char)('A' + idx - 1);
+}
+
+/* when the character changes, follow the default name only while it is unedited */
+static void setupSetChar (int seat, int dir)
+{
+	char oldDef[4], newDef[4];
+	defaultNameFor(portPlayerChar[seat], oldDef);
+	portPlayerChar[seat] = (portPlayerChar[seat] + dir + ROSTER_COUNT) % ROSTER_COUNT;
+	defaultNameFor(portPlayerChar[seat], newDef);
+	if (strcmp(portPlayerName[seat], oldDef) == 0)
+		strcpy(portPlayerName[seat], newDef);
+}
+
+static void setupButtonRects (Rect *ready, Rect *back)
+{
+	short by = (short)(screenHigh / 2 + 120 - 38);
+	SetRect(ready, (short)(screenWide / 2 - 150), by, (short)(screenWide / 2 - 30), (short)(by + 24));
+	SetRect(back,  (short)(screenWide / 2 + 30),  by, (short)(screenWide / 2 + 150), (short)(by + 24));
+}
+
+static void drawSetupButton (const BitMap *scr, const Rect *r, const char *label, int lit)
+{
+	RGBColor c;
+	pxFillRect(scr, IDX_BLACK, r->left, r->top, r->right, r->bottom);
+	Index2Color(lit ? IDX_YELLOW : IDX_WHITE, &c); RGBForeColor(&c);
+	FrameRect((Rect *)r);
+	drawText((short)((r->left + r->right) / 2 - (short)(strlen(label) * 4)),
+	         (short)(r->bottom - 7), label, lit ? IDX_YELLOW : IDX_WHITE);
+}
+
+static void drawSetupCard (int seat, int focus, int nFields, int labelNum,
+                           int hasSide, const char *ctrl)
+{
+	GrafPtr wasPort; RGBColor c;
+	const BitMap *scr = &(((GrafPtr)mainWndo)->portBits);
+	Rect panel; char buf[16];
+	int lx, vx, top;
+	unsigned char badge = colorChoices[portPlayerColorI[seat]];
+
+	GetPort(&wasPort); SetPort((GrafPtr)mainWndo);
+	SetRect(&panel, (short)(screenWide / 2 - 190), (short)(screenHigh / 2 - 120),
+	                (short)(screenWide / 2 + 190), (short)(screenHigh / 2 + 120));
+	PmForeColor(IDX_BLACK); PaintRect(&panel);
+	Index2Color(IDX_WHITE, &c); RGBForeColor(&c);
+	FrameRect(&panel); { Rect in = panel; InsetRect(&in, 2, 2); FrameRect(&in); }
+
+	top = panel.top; lx = panel.left + 28; vx = panel.left + 150;
+	snprintf(buf, sizeof buf, "PLAYER %d", labelNum);
+	drawText((short)(screenWide / 2 - (short)(strlen(buf) * 4)), (short)(top + 22), buf, IDX_YELLOW);
+
+	/* CHARACTER (drawn in the badge colour) */
+	drawText((short)lx, (short)(top + SC_CHAR_Y), focus == SF_CHAR ? ">" : " ",
+	         focus == SF_CHAR ? IDX_YELLOW : IDX_WHITE);
+	drawText((short)(lx + 16), (short)(top + SC_CHAR_Y), "CHARACTER",
+	         focus == SF_CHAR ? IDX_YELLOW : IDX_WHITE);
+	drawText((short)vx, (short)(top + SC_CHAR_Y), rosterNames[portPlayerChar[seat]], badge);
+
+	/* COLOUR (name + swatch) */
+	drawText((short)lx, (short)(top + SC_COLOR_Y), focus == SF_COLOR ? ">" : " ",
+	         focus == SF_COLOR ? IDX_YELLOW : IDX_WHITE);
+	drawText((short)(lx + 16), (short)(top + SC_COLOR_Y), "COLOUR",
+	         focus == SF_COLOR ? IDX_YELLOW : IDX_WHITE);
+	drawText((short)vx, (short)(top + SC_COLOR_Y), colorNames[portPlayerColorI[seat]],
+	         focus == SF_COLOR ? IDX_YELLOW : IDX_WHITE);
+	pxFillRect(scr, IDX_WHITE, vx + 118, top + SC_COLOR_Y - 9, vx + 140, top + SC_COLOR_Y + 1);
+	pxFillRect(scr, badge, vx + 119, top + SC_COLOR_Y - 8, vx + 139, top + SC_COLOR_Y);
+
+	/* NAME (three slots) */
+	drawText((short)lx, (short)(top + SC_NAME_Y),
+	         (focus >= SF_NAME0 && focus <= SF_NAME2) ? ">" : " ",
+	         (focus >= SF_NAME0 && focus <= SF_NAME2) ? IDX_YELLOW : IDX_WHITE);
+	drawText((short)(lx + 16), (short)(top + SC_NAME_Y), "NAME",
+	         (focus >= SF_NAME0 && focus <= SF_NAME2) ? IDX_YELLOW : IDX_WHITE);
+	for (int i = 0; i < 3; i++)
+	{
+		int sx = vx + i * 30, active = (focus == SF_NAME0 + i);
+		char ch[2];
+		pxFillRect(scr, active ? IDX_YELLOW : IDX_GRAY, sx - 2, top + SC_NAME_Y - 14, sx + 20, top + SC_NAME_Y + 4);
+		pxFillRect(scr, IDX_BLACK, sx, top + SC_NAME_Y - 12, sx + 18, top + SC_NAME_Y + 2);
+		ch[0] = portPlayerName[seat][i] ? portPlayerName[seat][i] : ' '; ch[1] = 0;
+		drawText((short)(sx + 5), (short)(top + SC_NAME_Y), ch, active ? IDX_YELLOW : IDX_WHITE);
+	}
+
+	/* PLAY SIDE (1v1 only) */
+	if (hasSide)
+	{
+		drawText((short)lx, (short)(top + SC_SIDE_Y), focus == SF_SIDE ? ">" : " ",
+		         focus == SF_SIDE ? IDX_YELLOW : IDX_WHITE);
+		drawText((short)(lx + 16), (short)(top + SC_SIDE_Y), "PLAY SIDE",
+		         focus == SF_SIDE ? IDX_YELLOW : IDX_WHITE);
+		drawText((short)vx, (short)(top + SC_SIDE_Y), selSide == 0 ? "LEFT GOAL" : "RIGHT GOAL",
+		         focus == SF_SIDE ? IDX_YELLOW : IDX_WHITE);
+	}
+
+	/* control hint */
+	drawText((short)lx, (short)(top + (hasSide ? 166 : 150)), "CONTROLS:", IDX_GRAY);
+	drawText((short)(lx + 84), (short)(top + (hasSide ? 166 : 150)), ctrl, IDX_GRAY);
+
+	if (shimMobile)
+	{
+		Rect ready, back;
+		setupButtonRects(&ready, &back);
+		drawSetupButton(scr, &ready, "READY", 1);
+		drawSetupButton(scr, &back, "BACK", 0);
+		drawText((short)(screenWide / 2 - 92), (short)(top + 190),
+		         "TAP A FIELD TO CHANGE IT", IDX_GRAY);
+	}
+	else
+		drawText((short)(panel.left + 14), (short)(panel.bottom - 12),
+		         "MOVE <>   CHANGE ^v   TYPE NAME   ENTER READY   ESC BACK", IDX_GRAY);
+	(void)nFields;
+	Index2Color(IDX_BLACK, &c); RGBForeColor(&c);
+	SetPort(wasPort); shimScreenDirty = 1;
+}
+
+/* merged gamepad direction/buttons across all pads (any pad can drive a card) */
+static void setupPadState (int *u, int *d, int *l, int *r, int *conf, int *back)
+{
+	float mx = 0, my = 0;
+	for (int p = 0; p < 4; p++)
+	{
+		float x, y; int b, bk, bs;
+		if (ShimPadRead(p, &x, &y, &b, &bk, &bs))
+		{
+			if ((x < 0 ? -x : x) > (mx < 0 ? -mx : mx)) mx = x;
+			if ((y < 0 ? -y : y) > (my < 0 ? -my : my)) my = y;
+		}
+	}
+	*u = my < -0.5f; *d = my > 0.5f; *l = mx < -0.5f; *r = mx > 0.5f;
+	*conf = ShimAnyPadButton(SDL_GAMEPAD_BUTTON_SOUTH) || ShimAnyPadButton(SDL_GAMEPAD_BUTTON_START);
+	*back = ShimAnyPadButton(SDL_GAMEPAD_BUTTON_EAST);
+}
+
+/* One player's card. Returns 1 = ready (advance), 0 = back (cancel), -1 = quit. */
+static int runOnePlayerSetup (int seat, int labelNum, int hasSide, const char *ctrl)
+{
+	int nFields = hasSide ? 6 : 5;
+	int focus = SF_CHAR;
+	int armed = 0;                                  /* wait for the entry press to release */
+	int pu = 0, pd = 0, pl = 0, pr = 0, pconf = 0, pback = 0;
+	Uint8 pletter[27] = {0};
+	int pbksp = 0;
+
+	if (!portPlayerName[seat][0]) defaultNameFor(portPlayerChar[seat], portPlayerName[seat]);
+	shimInput.tapFresh = 0; shimInput.backEdge = 0;
+
+	if (shimHeadless) return 1;
+
+	/* prime the edge state from whatever is held right now, so the key/button/tap
+	 * that chose START (Enter/Space/South) doesn't leak a first action into the
+	 * card — e.g. a held Space typing itself into the name. */
+	{
+		ShimPumpEvents();
+		const bool *k = SDL_GetKeyboardState(NULL);
+		int gu, gd, gl, gr, gc, gb;
+		setupPadState(&gu, &gd, &gl, &gr, &gc, &gb);
+		pu = k[SDL_SCANCODE_UP] || gu; pd = k[SDL_SCANCODE_DOWN] || gd;
+		pl = k[SDL_SCANCODE_LEFT] || gl; pr = k[SDL_SCANCODE_RIGHT] || gr;
+		pconf = k[SDL_SCANCODE_RETURN] || k[SDL_SCANCODE_KP_ENTER] || gc;
+		pback = k[SDL_SCANCODE_ESCAPE] || gb;
+		for (int i = 0; i < 27; i++)
+		{
+			int sc = (i < 26) ? SDL_SCANCODE_A + i : SDL_SCANCODE_SPACE;
+			pletter[i] = (Uint8)(k[sc] ? 1 : 0);
+		}
+		pbksp = k[SDL_SCANCODE_BACKSPACE] ? 1 : 0;
+	}
+
+	for (;;)
+	{
+		ShimPumpEvents();
+		if (shimInput.quitRequested) return -1;
+
+		const bool *ks = SDL_GetKeyboardState(NULL);
+		int gu, gd, gl, gr, gconf, gback;
+		setupPadState(&gu, &gd, &gl, &gr, &gconf, &gback);
+
+		int cu = ks[SDL_SCANCODE_UP] || gu;
+		int cd = ks[SDL_SCANCODE_DOWN] || gd;
+		int cl = ks[SDL_SCANCODE_LEFT] || gl;
+		int cr = ks[SDL_SCANCODE_RIGHT] || gr;
+		int cconf = ks[SDL_SCANCODE_RETURN] || ks[SDL_SCANCODE_KP_ENTER] || gconf;
+		int cback = ks[SDL_SCANCODE_ESCAPE] || shimInput.backEdge || gback;
+
+		if (!cconf && !cback) armed = 1;
+
+		/* navigation */
+		if (cl && !pl) focus = (focus + nFields - 1) % nFields;
+		if (cr && !pr) focus = (focus + 1) % nFields;
+
+		/* change the focused field */
+		int dir = (cd && !pd) ? 1 : (cu && !pu) ? -1 : 0;
+		if (dir)
+		{
+			if (focus == SF_CHAR) setupSetChar(seat, dir);
+			else if (focus == SF_COLOR) portPlayerColorI[seat] = (portPlayerColorI[seat] + dir + COLOR_COUNT) % COLOR_COUNT;
+			else if (focus >= SF_NAME0 && focus <= SF_NAME2)
+				portPlayerName[seat][focus - SF_NAME0] = cycleChar(portPlayerName[seat][focus - SF_NAME0], dir);
+			else if (focus == SF_SIDE) selSide ^= 1;
+		}
+
+		/* keyboard name typing: A-Z and space set the slot and advance */
+		for (int i = 0; i < 27; i++)
+		{
+			int sc = (i < 26) ? SDL_SCANCODE_A + i : SDL_SCANCODE_SPACE;
+			int now = ks[sc] ? 1 : 0;
+			if (now && !pletter[i])
+			{
+				if (focus < SF_NAME0 || focus > SF_NAME2) focus = SF_NAME0;
+				portPlayerName[seat][focus - SF_NAME0] = (i < 26) ? (char)('A' + i) : ' ';
+				if (focus < SF_NAME2) focus++;
+			}
+			pletter[i] = (Uint8)now;
+		}
+		{
+			int bk = ks[SDL_SCANCODE_BACKSPACE] ? 1 : 0;
+			if (bk && !pbksp && focus >= SF_NAME0 && focus <= SF_NAME2)
+			{
+				if (focus > SF_NAME0) focus--;
+				portPlayerName[seat][focus - SF_NAME0] = ' ';
+			}
+			pbksp = bk;
+		}
+
+		/* touch: tap a field to change it, or the READY / BACK buttons */
+		if (shimInput.tapFresh)
+		{
+			int tx = (int)(shimInput.tapX * screenWide), ty = (int)(shimInput.tapY * screenHigh);
+			int top = screenHigh / 2 - 120, vx = (screenWide / 2 - 190) + 150;
+			Rect ready, back;
+			shimInput.tapFresh = 0;
+			setupButtonRects(&ready, &back);
+			if (tx >= ready.left && tx <= ready.right && ty >= ready.top && ty <= ready.bottom) { if (armed) return 1; }
+			else if (tx >= back.left && tx <= back.right && ty >= back.top && ty <= back.bottom) { if (armed) return 0; }
+			else if (ty >= top + SC_CHAR_Y - 12 && ty <= top + SC_CHAR_Y + 4) setupSetChar(seat, 1);
+			else if (ty >= top + SC_COLOR_Y - 12 && ty <= top + SC_COLOR_Y + 4) portPlayerColorI[seat] = (portPlayerColorI[seat] + 1) % COLOR_COUNT;
+			else if (ty >= top + SC_NAME_Y - 14 && ty <= top + SC_NAME_Y + 4)
+			{
+				int slot = (tx - vx + 4) / 30;
+				if (slot >= 0 && slot < 3)
+				{
+					focus = SF_NAME0 + slot;
+					portPlayerName[seat][slot] = cycleChar(portPlayerName[seat][slot], 1);
+				}
+			}
+			else if (hasSide && ty >= top + SC_SIDE_Y - 12 && ty <= top + SC_SIDE_Y + 4) selSide ^= 1;
+		}
+
+		if (armed && cconf && !pconf) return 1;
+		if (armed && cback && !pback) return 0;
+
+		pu = cu; pd = cd; pl = cl; pr = cr; pconf = cconf; pback = cback;
+
+		drawSetupCard(seat, focus, nFields, labelNum, hasSide, ctrl);
+		ShimForcePresent();
+		SDL_Delay(10);
+	}
+}
+
+/* Run setup for every human seat listed. Returns 1 to start the match, 0 if a
+ * player backed out (return to the menu). seatLabel[i] is the P# shown. */
+static int runPlayerSetup (const int *seats, const int *labels, const char *const *ctrls,
+                           int nHumans, int hasSide)
+{
+	if (shimHeadless || portCpuDemo || portFourDemo)
+		return 1;
+	for (int i = 0; i < nHumans; i++)
+	{
+		int r = runOnePlayerSetup(seats[i], labels[i], hasSide && nHumans == 1, ctrls[i]);
+		if (r == -1) { quitting = TRUE; return 0; }
+		if (r == 0) { menuDirty = 1; return 0; }
+	}
+	menuDirty = 1;
+	return 1;
+}
+
+/* --setup-preview: render the 1v1 card in each focus state to the dump dir and
+ * quit (there is no way to drive the modal in headless). Testing only. */
+static void PortSetupPreview (void)
+{
+	char path[512];
+	if (!shimFrameDumpDir) return;
+	strcpy(portPlayerName[0], "LKM");
+	portPlayerChar[0] = 0;
+	portPlayerColorI[0] = 0;
+	for (int focus = SF_CHAR; focus <= SF_SIDE; focus++)
+	{
+		drawSetupCard(0, focus, 6, 1, 1, "KEYBOARD / MOUSE  OR  GAMEPAD");
+		snprintf(path, sizeof path, "%s/setup_%d.ppm", shimFrameDumpDir, focus);
+		ShimDumpScreenPPM(path);
+	}
+}
+
 static void menuValueText (int item, char *buf, size_t bufsz)
 {
 	switch (item)
@@ -696,14 +1055,34 @@ static void startGame (void)
 	{
 		/* four-player modes run their own loop and return to the menu.
 		 * seat order: 0 = P1 (kb/mouse), 1..3 = the P2..P4 menu rows */
-		int personas[4];
+		int personas[4], seats[4], labels[4], nH = 0;
+		const char *ctrls[4];
 		personas[0] = kHumanPlayer;
 		for (int i = 0; i < 3; i++)
 			personas[1 + i] = selSeat[i] == 0 ? kHumanPlayer : selSeat[i];
+		for (int i = 0; i < 4; i++)
+			if (personas[i] == kHumanPlayer)
+			{
+				seats[nH] = i;
+				labels[nH] = i + 1;
+				ctrls[nH] = (i == 0) ? "KEYBOARD / MOUSE" : "GAMEPAD";
+				nH++;
+			}
+		if (!runPlayerSetup(seats, labels, ctrls, nH, 0))
+			return;                            /* a player backed out */
 		whichHumanNumber = 1;
 		PortFourRun(selMode, personas);
 		menuDirty = 1;
 		return;
+	}
+
+	/* 1v1: set up the human (P1); the card also picks the play side */
+	if (!portCpuDemo)
+	{
+		int seats[1] = { 0 }, labels[1] = { 1 };
+		const char *ctrls[1] = { "KEYBOARD / MOUSE  OR  GAMEPAD" };
+		if (!runPlayerSetup(seats, labels, ctrls, 1, 1))
+			return;                            /* backed out -> menu */
 	}
 
 	whichGame = gameConsts[selGame];
@@ -883,6 +1262,13 @@ void HandleEvent (void)
 
 	if (shimInput.quitRequested)
 	{
+		quitting = TRUE;
+		return;
+	}
+
+	if (shimSetupPreview)                     /* testing: dump the setup card and quit */
+	{
+		PortSetupPreview();
 		quitting = TRUE;
 		return;
 	}
