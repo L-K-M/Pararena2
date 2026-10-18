@@ -209,6 +209,10 @@ static void handleEvent (const SDL_Event *ev)
 			}
 			pad = padList[0];
 			shimInput.padConnected = (pad != NULL);
+			/* the side panels reflect pad presence; repaint even if the
+			 * 8bpp screen itself hasn't changed */
+			shimScreenDirty = 1;
+			lastPresentNS = 0;
 			break;
 		case SDL_EVENT_GAMEPAD_REMOVED:
 			for (int i = 0; i < 4; i++)
@@ -221,6 +225,8 @@ static void handleEvent (const SDL_Event *ev)
 			}
 			pad = padList[0];
 			shimInput.padConnected = (pad != NULL);
+			shimScreenDirty = 1;      /* repaint the side panels here too */
+			lastPresentNS = 0;
 			break;
 		case SDL_EVENT_KEY_DOWN:
 			if (ev->key.key == SDLK_F11 ||
@@ -412,10 +418,14 @@ void GetKeys (KeyMap theKeys)
 
 	if (shimInput.bashDown)
 		setKeyBit(km, kB, 1);
+	/* ANY pad's Start pauses (not just pad 1): in a four-player game the
+	 * other seats hold pads 2..4 and deserve a working pause button too —
+	 * matching the side panels' "START = PAUSE" and the pause screens'
+	 * any-pad Back = end game */
+	if (ShimAnyPadButton(SDL_GAMEPAD_BUTTON_START))
+		setKeyBit(km, kTab, 1);
 	if (pad)
 	{
-		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_START))
-			setKeyBit(km, kTab, 1);
 		if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_NORTH))
 			setKeyBit(km, kR, 1);
 	}

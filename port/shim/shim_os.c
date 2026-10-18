@@ -13,6 +13,8 @@ long shimAutoQuitTicks = 0;
 const char *shimFrameDumpDir = NULL;
 int  shimFrameDumpEvery = 60;
 int  shimSetupPreview = 0;
+const char *shimWindowShotPath = NULL;
+int  shimWinWOverride = 0, shimWinHOverride = 0;
 
 static Uint64 startNS;
 static long   lastDumpTick = -1;
