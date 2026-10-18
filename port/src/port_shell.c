@@ -815,6 +815,9 @@ static int runOnePlayerSetup (int seat, int labelNum, int hasSide, const char *c
 		int cr = ks[SDL_SCANCODE_RIGHT] || gr;
 		int cconf = ks[SDL_SCANCODE_RETURN] || ks[SDL_SCANCODE_KP_ENTER] || gconf;
 		int cback = ks[SDL_SCANCODE_ESCAPE] || shimInput.backEdge || gback;
+		shimInput.backEdge = 0;   /* consume the edge, as every other reader does:
+		                             left set, one Back press keeps cback stuck at 1,
+		                             `armed` never sets, and the card can't be left */
 
 		if (!cconf && !cback) armed = 1;
 
